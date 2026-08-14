@@ -9,10 +9,16 @@ enum SettingsStore {
         static let streamingQuality = "streamingQuality"
         static let trackpadSensitivity = "trackpadSensitivity"
         static let naturalScrolling = "naturalScrolling"
+        static let clipboardSyncEnabled = "clipboardSyncEnabled"
     }
 
     static var streamingQuality: QualityProfile {
         guard let raw = UserDefaults.standard.string(forKey: Key.streamingQuality) else { return .auto }
         return QualityProfile(rawValue: raw) ?? .auto
+    }
+
+    static var clipboardSyncEnabled: Bool {
+        UserDefaults.standard.object(forKey: Key.clipboardSyncEnabled) == nil
+            || UserDefaults.standard.bool(forKey: Key.clipboardSyncEnabled)
     }
 }

@@ -41,9 +41,9 @@ hands you, get back zero or more complete, decoded messages.
 | `video` | 3 | Encoded frame data (implemented) |
 | `input` | 4 | Mouse/touch/trackpad events (implemented) |
 | `keyboard` | 5 | Key events, modifiers, text input (implemented) |
-| `clipboard` | 6 | Clipboard sync (Phase 7) |
-| `file` | 7 | File transfer chunks/metadata (Phase 7) |
-| `system` | 8 | Mac shortcuts: lock, sleep, media keys (Phase 7) |
+| `clipboard` | 6 | Clipboard sync (implemented) |
+| `file` | 7 | File transfer chunks/metadata (implemented, iPhone → Mac only) |
+| `system` | 8 | Mac shortcuts: lock, sleep, media keys (implemented) |
 | `heartbeat` | 9 | Ping/pong (implemented; not yet driven by a timer) |
 | `quality` | 10 | Streaming quality (manual selection implemented; automatic adjustment is Phase 8) |
 
@@ -321,6 +321,46 @@ UInt8   profile   (1=auto 2=low 3=balanced 4=high — see Shared/Models/QualityP
 network-condition-aware adjustment is Phase 8 scope, built as a second
 layer that calls the same `VideoStreamer.applyQuality(_:)` mechanism
 automatically instead of only in response to a user's Settings choice.
+
+### `clipboard` / ClipboardUpdate (type 1)
+
+Bidirectional over the control connection.
+
+```
+String   text
+```
+
+The Mac polls `NSPasteboard.general.changeCount` (there's no push API for
+it) and broadcasts on change; the iPhone applies incoming updates directly
+since writing to `UIPasteboard` isn't subject to iOS's read-permission
+prompt. The iPhone → Mac direction is user-triggered (a "Send Clipboard to
+Mac" action), not continuous background polling — see SECURITY.md for why.
+
+### `file` / FileOffer, FileChunk, FileComplete (types 1-3)
+
+Each transfer gets its own `.file`-purpose connection, opened only for the
+transfer's duration. No accept/decline round trip — both ends are already
+an authenticated, paired device by the time a `.file` connection exists.
+
+```
+FileOffer      UUID transferID, String filename, UInt64 fileSize
+FileChunk      UUID transferID, UInt64 offset, Data chunk   (256KB chunks)
+FileComplete   UUID transferID
+```
+
+iPhone → Mac only in this implementation — see ARCHITECTURE.md's
+connection model for why a Mac-initiated push isn't wired up.
+
+### `system` / SystemCommand (type 1)
+
+```
+UInt8   command   (SystemCommand raw value — see Shared/Protocol/SystemCommand.swift)
+```
+
+One of 15 fixed actions (Mission Control, Launchpad, Spotlight, App
+Switcher, Show Desktop, Lock, Sleep, Mute, Volume Up/Down, Play/Pause,
+Previous/Next Track, Restart, Shut Down). `restart` and `shutdown` require
+the iPhone to confirm before sending — see `SystemCommand.requiresConfirmation`.
 
 ## Design rules for future messages
 

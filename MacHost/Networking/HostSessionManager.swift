@@ -15,15 +15,21 @@ final class HostSessionManager: ObservableObject {
     @Published private(set) var connectedPeers: [ConnectedPeer] = []
     @Published private(set) var isAdvertising = false
     @Published private(set) var lastError: String?
+    @Published private(set) var activeTransfers: [UUID: FileTransferProgress] = [:]
 
     let pairingCoordinator: PairingCoordinator
     private let trustedDevices = TrustedDeviceStore()
+    private let clipboardMonitor = ClipboardMonitor()
+    private var clipboardChannels: [UUID: SecureChannel] = [:]
 
     private var listener: NWListener?
     private static let listenerQueue = DispatchQueue(label: "com.macremote.host.listener")
 
     init(pairingCoordinator: PairingCoordinator = PairingCoordinator()) {
         self.pairingCoordinator = pairingCoordinator
+        clipboardMonitor.onTextChanged = { [weak self] text in
+            self?.broadcastClipboard(text)
+        }
     }
 
     func start() {
@@ -52,6 +58,7 @@ final class HostSessionManager: ObservableObject {
 
             newListener.start(queue: Self.listenerQueue)
             listener = newListener
+            clipboardMonitor.start()
         } catch {
             lastError = "Couldn't start listening for connections."
             Logging.network.error("Listener creation failed: \(String(describing: error), privacy: .public)")
@@ -63,6 +70,15 @@ final class HostSessionManager: ObservableObject {
         listener = nil
         isAdvertising = false
         connectedPeers.removeAll()
+        clipboardMonitor.stop()
+        clipboardChannels.removeAll()
+    }
+
+    private func broadcastClipboard(_ text: String) {
+        guard SettingsStore.clipboardSyncEnabled else { return }
+        for channel in clipboardChannels.values {
+            Task { try? await channel.send(.clipboardUpdate(ClipboardPayload(text: text))) }
+        }
     }
 
     /// Removes a paired device's trust record. It will need to pair again
@@ -138,15 +154,32 @@ final class HostSessionManager: ObservableObject {
                 case .control:
                     var mutableSession = session
                     self.registerPeer(hello)
+                    self.clipboardChannels[hello.deviceID] = SecureChannel(transport: transport, session: session)
                     await self.pumpAuthenticatedTraffic(deviceID: hello.deviceID, transport: transport, iterator: &iterator, session: &mutableSession)
                     self.removePeer(id: hello.deviceID)
+                    self.clipboardChannels.removeValue(forKey: hello.deviceID)
                 case .video:
                     await self.streamVideo(deviceID: hello.deviceID, transport: transport, session: session, iterator: &iterator)
+                case .file:
+                    await self.receiveFile(transport: transport, session: session, iterator: &iterator)
                 }
             case .rejected(let reason):
                 Logging.session.notice("Rejected \(hello.deviceName, privacy: .public): \(reason, privacy: .public)")
                 await transport.close()
             }
+        }
+    }
+
+    /// Receives one file transfer on a dedicated `.file` connection —
+    /// iPhone → Mac only, see `FileReceiver`'s doc comment for why.
+    private func receiveFile(
+        transport: MessageTransport,
+        session: SecureSession,
+        iterator: inout AsyncStream<TransportEvent>.Iterator
+    ) async {
+        let receiver = FileReceiver(transport: transport, session: session)
+        await receiver.receive(iterator: &iterator) { [weak self] progress in
+            Task { @MainActor in self?.activeTransfers[progress.transferID] = progress }
         }
     }
 
@@ -254,6 +287,11 @@ final class HostSessionManager: ObservableObject {
             KeyboardController.typeText(payload.text)
         case .specialKey(let payload):
             KeyboardController.sendSpecialKey(payload.key, modifiers: payload.modifiers, isDown: payload.isDown)
+        case .clipboardUpdate(let payload):
+            guard SettingsStore.clipboardSyncEnabled else { return }
+            clipboardMonitor.applyRemoteText(payload.text)
+        case .systemCommand(let payload):
+            SystemCommandController.perform(payload.command)
         default:
             break
         }

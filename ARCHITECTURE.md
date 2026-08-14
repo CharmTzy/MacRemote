@@ -30,14 +30,16 @@ control handshake succeeds:
    large file never sits in a queue ahead of a mouse click on the control
    channel (see PROTOCOL.md's "why three connections" section).
 
-The control and video channels are both implemented now; file transfer is
-still Phase 7. Notably, video isn't a separate protocol or a separate
-authentication scheme — it's a second connection that declares
-`channelPurpose: .video` in its own Hello and runs through the identical
+All three channels are implemented now — file transfer opens fresh per
+transfer and closes when it's done, exactly as described above. Notably,
+neither video nor file transfer is a separate protocol or a separate
+authentication scheme — each is just another connection that declares its
+`channelPurpose` in its own Hello and runs through the identical
 pairing/session-auth flow as the control channel (see PROTOCOL.md). The
-only place that treats the two differently is `HostSessionManager`, which
-branches *after* authentication succeeds: a `.control` connection joins the
-ordinary message pump, a `.video` connection gets handed to `VideoStreamer`.
+only place that treats them differently is `HostSessionManager`, which
+branches *after* authentication succeeds: `.control` joins the ordinary
+message pump, `.video` gets handed to `VideoStreamer`, `.file` gets handed
+to `FileReceiver`.
 
 ## Module layout
 

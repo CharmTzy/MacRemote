@@ -39,14 +39,21 @@ list). What exists right now:
       scrolling). No onboarding carousel — the pairing and permissions
       flows already guide a first run, and the spec's own guidance is to
       keep onboarding short.
-- [ ] Phase 7 — Clipboard sync, file transfer, media/system commands, reconnection
+- [x] Phase 7 — Clipboard sync (Mac→iPhone automatic; iPhone→Mac is a
+      one-tap "Send Clipboard to Mac" — see SECURITY.md for why they're not
+      symmetric), file transfer (iPhone→Mac, its own dedicated connection
+      per transfer, progress shown on both apps), 15 system/media commands
+      (Mission Control, Spotlight, sleep, volume, play/pause, ...,
+      restart/shutdown behind a confirmation), and automatic reconnection
+      with exponential backoff when the control connection drops
+      unexpectedly.
 - [ ] Phase 8 — Performance tuning and test coverage
 
-**Core remote control now works end to end**: a paired iPhone can watch
-the Mac's screen, control the cursor by touching it, and type on it — tap
-"View Screen" on a connected Mac's detail screen, then the keyboard icon
-to type. What's left is mostly product polish (Phase 6), convenience
-features (Phase 7), and hardening (Phase 8).
+**Everything from the spec's success criteria works end to end except
+adaptive (automatic) quality adjustment**, which is what's left for Phase
+8 — screen mirroring, touch/trackpad control, keyboard input, multi-display
+switching, clipboard, file transfer, system commands, and reconnection are
+all implemented.
 
 **A note on verification:** this codebase was written in an environment
 without Xcode or the Swift/Apple toolchain available, so `xcodegen generate`

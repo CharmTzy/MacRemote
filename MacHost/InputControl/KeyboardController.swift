@@ -32,6 +32,14 @@ enum KeyboardController {
         event.flags = modifiers.cgEventFlags
         event.post(tap: .cghidEventTap)
     }
+
+    /// A complete press-and-release — used for system shortcuts
+    /// (`SystemCommandController`) that don't need down/up as separate
+    /// steps the way a held key during typing does.
+    static func sendChord(_ key: SpecialKey, modifiers: KeyModifiers) {
+        sendSpecialKey(key, modifiers: modifiers, isDown: true)
+        sendSpecialKey(key, modifiers: modifiers, isDown: false)
+    }
 }
 
 private extension KeyModifiers {

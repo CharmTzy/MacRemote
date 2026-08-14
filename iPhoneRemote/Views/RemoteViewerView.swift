@@ -17,6 +17,7 @@ struct RemoteViewerView: View {
     @State private var showingKeyboard = false
     @State private var showingTrackpad = false
     @State private var showingDisplayPicker = false
+    @State private var showingShortcuts = false
     @State private var showingDisconnectConfirmation = false
 
     var body: some View {
@@ -58,6 +59,10 @@ struct RemoteViewerView: View {
                 KeyboardInputView(session: keyboardSession, isPresented: $showingKeyboard)
 
                 VStack {
+                    if controlSession.connectionState == .reconnecting {
+                        reconnectingBanner
+                            .padding(.top, 8)
+                    }
                     Spacer()
                     if videoSession.isStreaming {
                         remoteToolbar
@@ -79,12 +84,29 @@ struct RemoteViewerView: View {
         .sheet(isPresented: $showingDisplayPicker) {
             DisplayPickerView(videoSession: videoSession)
         }
+        .sheet(isPresented: $showingShortcuts) {
+            ShortcutsView(controlSession: controlSession)
+        }
         .confirmationDialog("Disconnect from \(mac.name)?", isPresented: $showingDisconnectConfirmation, titleVisibility: .visible) {
             Button("Disconnect", role: .destructive) {
                 controlSession.disconnect()
                 dismiss()
             }
         }
+    }
+
+    private var reconnectingBanner: some View {
+        HStack(spacing: 8) {
+            ProgressView()
+                .tint(.white)
+            Text("Reconnecting…")
+        }
+        .font(.footnote)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 8)
+        .background(.ultraThinMaterial, in: Capsule())
+        .environment(\.colorScheme, .dark)
     }
 
     private var remoteToolbar: some View {
@@ -108,6 +130,16 @@ struct RemoteViewerView: View {
                     } label: {
                         Label("Displays", systemImage: "display")
                     }
+                }
+                Button {
+                    showingShortcuts = true
+                } label: {
+                    Label("Shortcuts", systemImage: "bolt")
+                }
+                Button {
+                    controlSession.sendClipboardToMac()
+                } label: {
+                    Label("Send Clipboard to Mac", systemImage: "doc.on.clipboard")
                 }
                 Button {
                     dismiss()

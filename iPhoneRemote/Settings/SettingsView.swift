@@ -6,6 +6,7 @@ struct SettingsView: View {
     @AppStorage(SettingsStore.Key.streamingQuality) private var quality: QualityProfile = .auto
     @AppStorage(SettingsStore.Key.trackpadSensitivity) private var trackpadSensitivity: Double = 1.0
     @AppStorage(SettingsStore.Key.naturalScrolling) private var naturalScrolling = true
+    @AppStorage(SettingsStore.Key.clipboardSyncEnabled) private var clipboardSyncEnabled = true
     @State private var pairedMacs: [PairedDeviceRecord] = []
     @State private var showingForgetAllConfirmation = false
 
@@ -35,6 +36,14 @@ struct SettingsView: View {
                     Text("Controls")
                 } footer: {
                     Text("Applies to Trackpad mode. Direct Touch always maps 1:1 to the Mac's screen.")
+                }
+
+                Section {
+                    Toggle("Clipboard Sync", isOn: $clipboardSyncEnabled)
+                } header: {
+                    Text("Clipboard")
+                } footer: {
+                    Text("Copying on the Mac updates your iPhone's clipboard automatically. Sending the other way needs a tap — from the remote viewer's menu — since iOS prompts for permission on automatic reads of the clipboard.")
                 }
 
                 Section("Security") {

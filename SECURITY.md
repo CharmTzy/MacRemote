@@ -133,13 +133,43 @@ On the Mac, every paired device is listed under Devices → Paired Devices
 Paired Devices) — both remove the stored trusted public key, so the device
 must re-pair from scratch, with a new code, before it can connect again.
 On the iPhone, the Mac's detail screen has a matching "Forget This Mac"
-action. This UI currently lives on the screens that made sense to build it
-into first; it'll consolidate into a dedicated Settings screen in Phase 6
-without changing what it does.
+action, and both apps' Settings screens (Phase 6) offer "Forget All" too.
 
 This is the honest fallback for "I don't trust that this device is still
 under my control" — there is no remote-wipe or revocation-list mechanism
 because there is no server to host one.
+
+## Clipboard sync's asymmetric design
+
+Phase 7 syncs the clipboard both directions, but not the same way in each
+direction, because of an iOS platform constraint worth calling out
+explicitly: **writing** to `UIPasteboard` from your own app carries no
+special restriction, but **reading** it — especially automatically, not in
+direct response to a user action — can trigger iOS's "Allow Paste from
+\[app\]" permission prompt (iOS 16+), and doing so repeatedly on a timer
+would trigger it repeatedly. So:
+
+- **Mac → iPhone** is automatic: the Mac polls `NSPasteboard.changeCount`
+  (there's no push API for the system pasteboard either — this is the
+  standard technique every Mac clipboard tool uses) and pushes changes;
+  the iPhone writes them straight to `UIPasteboard` on receipt.
+- **iPhone → Mac** requires a tap: "Send Clipboard to Mac" in the remote
+  viewer's menu reads `UIPasteboard` at that exact moment, which iOS
+  treats as an ordinary user-initiated read rather than background
+  polling. There is deliberately no continuous iPhone-side clipboard
+  monitor.
+
+## System commands and the Automation permission
+
+Sleep, Restart, Shut Down, Mute, and Volume (Phase 7) run through
+AppleScript talking to System Events (`NSAppleScript`, `MacHost/InputControl/
+SystemCommandController.swift`) — there's no `CGEvent`-level public API for
+them. macOS gates this behind the Automation permission (System Settings →
+Privacy & Security → Automation), prompted on first use, separate from
+Screen Recording and Accessibility. If a user denies it, those specific
+commands silently no-op (logged, not surfaced back to the iPhone) — a real
+gap, accepted for now since Apple provides no preflight-check API for
+Automation the way it does for the other two permissions.
 
 ## Not yet covered
 
@@ -149,8 +179,11 @@ because there is no server to host one.
   listener with connections isn't handled specially yet.
 - **The Mac's TCC prompts remain the last line of defense** for actual
   screen/input access — Screen Recording and Accessibility permission
-  still gate what a fully-authenticated session can do once Phase 3/4 add
-  real capability behind those permissions (see README.md's Permissions
-  section). Authentication answers "is this a device I trust," not "what
-  should a trusted device be allowed to do," which those OS permissions
-  continue to answer.
+  gate what a fully-authenticated session can do with the video and input
+  categories (see README.md's Permissions section). Authentication answers
+  "is this a device I trust," not "what should a trusted device be allowed
+  to do," which those OS permissions continue to answer.
+- **File transfer has no size limit or malware scanning.** A paired device
+  is a trusted device by this app's threat model, same as it would be for
+  AirDrop between your own devices — but worth stating plainly rather than
+  leaving implicit.

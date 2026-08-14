@@ -4,9 +4,16 @@ import Foundation
 struct SettingsView: View {
     @EnvironmentObject private var sessionManager: HostSessionManager
     @State private var showingForgetAllConfirmation = false
+    @AppStorage(SettingsStore.Key.clipboardSyncEnabled) private var clipboardSyncEnabled = true
 
     var body: some View {
         Form {
+            Section {
+                Toggle("Clipboard Sync", isOn: $clipboardSyncEnabled)
+            } footer: {
+                Text("When on, copying text on either device makes it available to paste on the other.")
+            }
+
             Section("Security") {
                 Button("Forget All Paired Devices", role: .destructive) {
                     showingForgetAllConfirmation = true

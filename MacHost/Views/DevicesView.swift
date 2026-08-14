@@ -32,6 +32,27 @@ struct DevicesView: View {
                 }
             }
 
+            if !sessionManager.activeTransfers.isEmpty {
+                Section("File Transfers") {
+                    ForEach(Array(sessionManager.activeTransfers.values)) { transfer in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(transfer.filename)
+                            if let failureReason = transfer.failureReason {
+                                Text(failureReason)
+                                    .font(.caption)
+                                    .foregroundStyle(.red)
+                            } else if transfer.isComplete {
+                                Label("Saved to Downloads/Mac Remote", systemImage: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ProgressView(value: transfer.fractionComplete)
+                            }
+                        }
+                    }
+                }
+            }
+
             Section("Paired Devices") {
                 if pairedDevices.isEmpty {
                     Text("No paired devices")

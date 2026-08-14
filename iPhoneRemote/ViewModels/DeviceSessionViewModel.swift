@@ -1,12 +1,15 @@
 import Foundation
 import Network
+import UIKit
 import OSLog
 import Combine
 
 /// Drives the connection lifecycle for one Mac from the iPhone side,
-/// including pausing for a pairing code when the Mac requires one. Owns a
-/// `RemoteConnection`, translates its outcome into `ConnectionState`, and
-/// produces user-facing error messages rather than raw `Error`s.
+/// including pausing for a pairing code when the Mac requires one and
+/// automatically reconnecting (with backoff) if an established connection
+/// drops unexpectedly. Owns a `RemoteConnection`, translates its outcome
+/// into `ConnectionState`, and produces user-facing error messages rather
+/// than raw `Error`s.
 @MainActor
 final class DeviceSessionViewModel: ObservableObject {
     @Published private(set) var connectionState: ConnectionState = .available
@@ -20,9 +23,15 @@ final class DeviceSessionViewModel: ObservableObject {
 
     private var connection: RemoteConnection?
     private var connectTask: Task<Void, Never>?
+    private var pumpTask: Task<Void, Never>?
+    private var reconnectTask: Task<Void, Never>?
+    private var lastEndpoint: NWEndpoint?
+    private var lastDisplayName: String?
 
     func connect(to endpoint: NWEndpoint, displayName: String) {
-        guard connectionState != .connecting, connectionState != .connected else { return }
+        guard connectionState != .connecting, connectionState != .connected, connectionState != .reconnecting else { return }
+        lastEndpoint = endpoint
+        lastDisplayName = displayName
         connectionState = .connecting
         lastErrorMessage = nil
         pairingCodeNeeded = false
@@ -80,8 +89,27 @@ final class DeviceSessionViewModel: ObservableObject {
         }
     }
 
+    /// Reads the local pasteboard and sends it to the Mac. Explicit and
+    /// user-triggered by design — iOS shows a system permission prompt for
+    /// *programmatic, unprompted* pasteboard reads, but treats a read that
+    /// happens directly in response to the user tapping something as an
+    /// ordinary user action. Continuous background polling of the iPhone's
+    /// clipboard would hit that prompt repeatedly, so this app doesn't do
+    /// that — see SECURITY.md.
+    func sendClipboardToMac() {
+        guard let text = UIPasteboard.general.string, !text.isEmpty else { return }
+        sendInput(.clipboardUpdate(ClipboardPayload(text: text)))
+    }
+
+    /// Tears the connection down and returns to `.available`. Safe to call
+    /// from any state, including mid-reconnect — this is also how the user
+    /// cancels an in-progress automatic reconnection attempt.
     func disconnect() {
         connectTask?.cancel()
+        pumpTask?.cancel()
+        pumpTask = nil
+        reconnectTask?.cancel()
+        reconnectTask = nil
         let connectionToClose = connection
         connection = nil
         activeSession = nil
@@ -100,10 +128,65 @@ final class DeviceSessionViewModel: ObservableObject {
             activeSession = session
             self.macDeviceID = macDeviceID
             pairingCodeNeeded = false
+            lastErrorMessage = nil
             connectionState = .connected
             Logging.session.info("Connected to \(displayName ?? macName, privacy: .public)")
+            startPumping()
         case .pairingCodeNeeded:
             pairingCodeNeeded = true
+        }
+    }
+
+    /// Receives unsolicited messages from the Mac on the control
+    /// connection — incoming clipboard updates, and detecting when the
+    /// connection itself drops. Writing to `UIPasteboard` from our own app
+    /// isn't subject to the read-side permission prompt, so clipboard
+    /// updates can be applied automatically.
+    private func startPumping() {
+        guard let connection, pumpTask == nil else { return }
+        pumpTask = Task {
+            while !Task.isCancelled, let message = await connection.nextMessage() {
+                guard case .clipboardUpdate(let payload) = message, SettingsStore.clipboardSyncEnabled else { continue }
+                UIPasteboard.general.string = payload.text
+            }
+            guard !Task.isCancelled else { return }
+            self.pumpTask = nil
+            self.handleUnexpectedDisconnect()
+        }
+    }
+
+    /// The pump loop ended without `disconnect()` having been called —
+    /// the connection dropped (Wi-Fi hiccup, Mac went to sleep, etc.)
+    /// rather than the user leaving. Rather than dumping them back to
+    /// "Tap to Connect," try to quietly restore the session.
+    private func handleUnexpectedDisconnect() {
+        guard connectionState == .connected, let endpoint = lastEndpoint else { return }
+        Logging.session.notice("Connection lost unexpectedly; attempting to reconnect")
+        connection = nil
+        activeSession = nil
+        connectionState = .reconnecting
+
+        reconnectTask = Task {
+            for attempt in 1...ReconnectPolicy.maxAttempts {
+                guard !Task.isCancelled, self.connectionState == .reconnecting else { return }
+
+                let delaySeconds = ReconnectPolicy.delay(forAttempt: attempt)
+                try? await Task.sleep(for: .milliseconds(Int(delaySeconds * 1000)))
+                guard !Task.isCancelled, self.connectionState == .reconnecting else { return }
+
+                let newConnection = RemoteConnection()
+                if let result = try? await newConnection.connect(to: endpoint), case .authenticated = result {
+                    self.connection = newConnection
+                    self.handle(result: result, displayName: self.lastDisplayName)
+                    Logging.session.info("Session restored after \(attempt) attempt(s)")
+                    return
+                }
+                await newConnection.close()
+            }
+
+            guard !Task.isCancelled, self.connectionState == .reconnecting else { return }
+            self.connectionState = .authenticationFailed
+            self.lastErrorMessage = "Couldn't reconnect to Mac. Make sure it's still on the same Wi-Fi network, then try again."
         }
     }
 }

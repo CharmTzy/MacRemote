@@ -1,11 +1,14 @@
 import SwiftUI
 import Network
+import UniformTypeIdentifiers
 
 struct MacDetailView: View {
     let mac: DiscoveredMac
     @StateObject private var session = DeviceSessionViewModel()
+    @StateObject private var fileTransfer = FileTransferViewModel()
     @State private var showingForgetConfirmation = false
     @State private var showingViewer = false
+    @State private var showingFileImporter = false
 
     var body: some View {
         List {
@@ -35,20 +38,30 @@ struct MacDetailView: View {
 
             Section {
                 Button {
-                    if session.connectionState == .connected {
+                    if session.connectionState == .connected || session.connectionState == .reconnecting {
                         session.disconnect()
                     } else {
                         session.connect(to: mac.endpoint, displayName: mac.name)
                     }
                 } label: {
-                    if session.connectionState == .connecting {
+                    switch session.connectionState {
+                    case .connecting:
                         HStack {
                             Spacer()
                             ProgressView()
                             Spacer()
                         }
-                    } else {
-                        Text(session.connectionState == .connected ? "Disconnect" : "Connect")
+                    case .reconnecting:
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Text("Cancel Reconnecting")
+                            Spacer()
+                        }
+                    case .connected:
+                        Text("Disconnect")
+                    default:
+                        Text("Connect")
                     }
                 }
                 .disabled(session.connectionState == .connecting)
@@ -60,6 +73,34 @@ struct MacDetailView: View {
                         showingViewer = true
                     } label: {
                         Label("View Screen", systemImage: "rectangle.on.rectangle")
+                    }
+                    Button {
+                        showingFileImporter = true
+                    } label: {
+                        Label("Send File…", systemImage: "doc.badge.arrow.up")
+                    }
+                    .disabled(fileTransfer.activeTransfer != nil && fileTransfer.activeTransfer?.isComplete == false && fileTransfer.activeTransfer?.failureReason == nil)
+                }
+            }
+
+            if let transfer = fileTransfer.activeTransfer {
+                Section("File Transfer") {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(transfer.filename)
+                        if let failureReason = transfer.failureReason {
+                            Text(failureReason)
+                                .font(.caption)
+                                .foregroundStyle(.red)
+                        } else if transfer.isComplete {
+                            Label("Sent", systemImage: "checkmark.circle.fill")
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        } else {
+                            ProgressView(value: transfer.fractionComplete)
+                        }
+                    }
+                    .swipeActions {
+                        Button("Dismiss") { fileTransfer.dismiss() }
                     }
                 }
             }
@@ -96,6 +137,11 @@ struct MacDetailView: View {
         }
         .fullScreenCover(isPresented: $showingViewer) {
             RemoteViewerView(mac: mac, controlSession: session)
+        }
+        .fileImporter(isPresented: $showingFileImporter, allowedContentTypes: [.item]) { result in
+            if case .success(let url) = result {
+                fileTransfer.send(fileURL: url, to: mac.endpoint)
+            }
         }
     }
 }

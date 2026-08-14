@@ -46,6 +46,17 @@ enum ProtocolMessage: Sendable {
     // Quality (Phase 6 manual selection; Phase 8 adds automatic adjustment
     // on top of the same mechanism) — sent on the video connection.
     case qualityPreference(QualityPreferencePayload)
+
+    // Clipboard (Phase 7) — bidirectional over the control connection.
+    case clipboardUpdate(ClipboardPayload)
+
+    // File transfer (Phase 7) — its own dedicated connection per transfer.
+    case fileOffer(FileOfferPayload)
+    case fileChunk(FileChunkPayload)
+    case fileComplete(FileCompletePayload)
+
+    // System commands (Phase 7) — control connection.
+    case systemCommand(SystemCommandPayload)
 }
 
 extension ProtocolMessage {
@@ -63,6 +74,12 @@ extension ProtocolMessage {
             return .keyboard
         case .qualityPreference:
             return .quality
+        case .clipboardUpdate:
+            return .clipboard
+        case .fileOffer, .fileChunk, .fileComplete:
+            return .file
+        case .systemCommand:
+            return .system
         }
     }
 
@@ -94,6 +111,11 @@ extension ProtocolMessage {
         case .textInput: return 1
         case .specialKey: return 2
         case .qualityPreference: return 1
+        case .clipboardUpdate: return 1
+        case .fileOffer: return 1
+        case .fileChunk: return 2
+        case .fileComplete: return 3
+        case .systemCommand: return 1
         }
     }
 
@@ -124,6 +146,11 @@ extension ProtocolMessage {
         case .textInput(let payload): payload.encode(into: &writer)
         case .specialKey(let payload): payload.encode(into: &writer)
         case .qualityPreference(let payload): payload.encode(into: &writer)
+        case .clipboardUpdate(let payload): payload.encode(into: &writer)
+        case .fileOffer(let payload): payload.encode(into: &writer)
+        case .fileChunk(let payload): payload.encode(into: &writer)
+        case .fileComplete(let payload): payload.encode(into: &writer)
+        case .systemCommand(let payload): payload.encode(into: &writer)
         }
         return writer.data
     }
@@ -210,8 +237,23 @@ extension ProtocolMessage {
             case 1: return .qualityPreference(try QualityPreferencePayload.decode(from: &reader))
             default: throw DecodeError.unknownType(category: category, type: type)
             }
-        case .clipboard, .file, .system:
-            throw DecodeError.unknownType(category: category, type: type)
+        case .clipboard:
+            switch type {
+            case 1: return .clipboardUpdate(try ClipboardPayload.decode(from: &reader))
+            default: throw DecodeError.unknownType(category: category, type: type)
+            }
+        case .file:
+            switch type {
+            case 1: return .fileOffer(try FileOfferPayload.decode(from: &reader))
+            case 2: return .fileChunk(try FileChunkPayload.decode(from: &reader))
+            case 3: return .fileComplete(try FileCompletePayload.decode(from: &reader))
+            default: throw DecodeError.unknownType(category: category, type: type)
+            }
+        case .system:
+            switch type {
+            case 1: return .systemCommand(try SystemCommandPayload.decode(from: &reader))
+            default: throw DecodeError.unknownType(category: category, type: type)
+            }
         }
     }
 

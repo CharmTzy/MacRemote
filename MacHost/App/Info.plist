@@ -20,5 +20,7 @@
 	<array>
 		<string>_macremote._tcp</string>
 	</array>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>Mac Remote uses Apple Events to perform actions your iPhone requests, like sleep, restart, and volume control.</string>
 </dict>
 </plist>
