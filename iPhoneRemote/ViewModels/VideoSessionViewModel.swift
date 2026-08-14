@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import CoreGraphics
 import OSLog
 import Combine
 
@@ -11,6 +12,11 @@ import Combine
 final class VideoSessionViewModel: ObservableObject {
     @Published private(set) var isStreaming = false
     @Published private(set) var errorMessage: String?
+    /// The Mac's display size, from the most recent `VideoConfig` — needed
+    /// to map a touch point to a normalized position (see
+    /// `VideoContentGeometry`), since the video is letterboxed rather than
+    /// stretched to fill the viewer.
+    @Published private(set) var videoSize: CGSize?
 
     let decoder = VideoDecoder()
 
@@ -53,6 +59,7 @@ final class VideoSessionViewModel: ObservableObject {
             case .videoConfig(let config):
                 do {
                     try decoder.applyConfig(config)
+                    videoSize = CGSize(width: Int(config.width), height: Int(config.height))
                     isStreaming = true
                     errorMessage = nil
                 } catch {

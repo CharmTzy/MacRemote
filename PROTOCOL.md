@@ -39,7 +39,7 @@ hands you, get back zero or more complete, decoded messages.
 | `authentication` | 1 | Pairing handshake, session auth (implemented) |
 | `session` | 2 | Hello / HelloAck (implemented) |
 | `video` | 3 | Encoded frame data (implemented) |
-| `input` | 4 | Mouse/touch/trackpad events (Phase 4) |
+| `input` | 4 | Mouse/touch/trackpad events (implemented) |
 | `keyboard` | 5 | Key events, modifiers, text input (Phase 5) |
 | `clipboard` | 6 | Clipboard sync (Phase 7) |
 | `file` | 7 | File transfer chunks/metadata (Phase 7) |
@@ -241,6 +241,26 @@ instead of a black screen with no context.
 ```
 String   reason
 ```
+
+### `input` / MouseMove, MouseButton, MouseClick, MouseDragged, Scroll (types 1-5)
+
+All wrapped in `secureEnvelope`, sent over the **control** connection (never
+video). `NormalizedPoint` (`Shared/Models/NormalizedPoint.swift`) is two
+`Float32`s in `[0, 1]` — a fraction of the Mac's display, not a pixel
+position, so it's meaningful regardless of either device's resolution.
+
+```
+MouseMove     NormalizedPoint position
+MouseButton   NormalizedPoint position, UInt8 button, Bool isDown
+MouseClick    NormalizedPoint position, UInt8 button, UInt8 clickCount
+MouseDragged  NormalizedPoint position, UInt8 button
+Scroll        Float deltaX, Float deltaY
+```
+
+`button`: 1 = left, 2 = right. `MouseClick` is the common case (a plain tap
+or a long-press-as-right-click) sent as one atomic message; `MouseButton`
++ `MouseDragged` + `MouseButton` bracket an actual drag, matching the
+down/dragged/up shape `CGEvent` itself expects on the Mac side.
 
 ## Design rules for future messages
 

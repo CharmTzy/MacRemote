@@ -95,7 +95,7 @@ struct MacDetailView: View {
             Text("Your iPhone will need to pair with this Mac again before it can connect.")
         }
         .fullScreenCover(isPresented: $showingViewer) {
-            RemoteViewerView(mac: mac)
+            RemoteViewerView(mac: mac, controlSession: session)
         }
     }
 }

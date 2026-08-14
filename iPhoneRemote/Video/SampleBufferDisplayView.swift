@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 import AVFoundation
 
 /// A `UIView` whose backing `CALayer` is directly an

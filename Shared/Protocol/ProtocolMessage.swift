@@ -27,6 +27,14 @@ enum ProtocolMessage: Sendable {
     case videoConfig(VideoConfigPayload)
     case videoFrame(VideoFramePayload)
     case videoError(VideoErrorPayload)
+
+    // Input (Phase 4) — always travels wrapped in secureEnvelope, over the
+    // control connection (never video — see ARCHITECTURE.md).
+    case mouseMove(MouseMovePayload)
+    case mouseButton(MouseButtonPayload)
+    case mouseClick(MouseClickPayload)
+    case mouseDragged(MouseDraggedPayload)
+    case scroll(ScrollPayload)
 }
 
 extension ProtocolMessage {
@@ -38,6 +46,8 @@ extension ProtocolMessage {
             return .authentication
         case .videoConfig, .videoFrame, .videoError:
             return .video
+        case .mouseMove, .mouseButton, .mouseClick, .mouseDragged, .scroll:
+            return .input
         }
     }
 
@@ -59,6 +69,11 @@ extension ProtocolMessage {
         case .videoConfig: return 1
         case .videoFrame: return 2
         case .videoError: return 3
+        case .mouseMove: return 1
+        case .mouseButton: return 2
+        case .mouseClick: return 3
+        case .mouseDragged: return 4
+        case .scroll: return 5
         }
     }
 
@@ -79,6 +94,11 @@ extension ProtocolMessage {
         case .videoConfig(let payload): payload.encode(into: &writer)
         case .videoFrame(let payload): payload.encode(into: &writer)
         case .videoError(let payload): payload.encode(into: &writer)
+        case .mouseMove(let payload): payload.encode(into: &writer)
+        case .mouseButton(let payload): payload.encode(into: &writer)
+        case .mouseClick(let payload): payload.encode(into: &writer)
+        case .mouseDragged(let payload): payload.encode(into: &writer)
+        case .scroll(let payload): payload.encode(into: &writer)
         }
         return writer.data
     }
@@ -143,7 +163,16 @@ extension ProtocolMessage {
             case 3: return .videoError(try VideoErrorPayload.decode(from: &reader))
             default: throw DecodeError.unknownType(category: category, type: type)
             }
-        case .input, .keyboard, .clipboard, .file, .system, .quality:
+        case .input:
+            switch type {
+            case 1: return .mouseMove(try MouseMovePayload.decode(from: &reader))
+            case 2: return .mouseButton(try MouseButtonPayload.decode(from: &reader))
+            case 3: return .mouseClick(try MouseClickPayload.decode(from: &reader))
+            case 4: return .mouseDragged(try MouseDraggedPayload.decode(from: &reader))
+            case 5: return .scroll(try ScrollPayload.decode(from: &reader))
+            default: throw DecodeError.unknownType(category: category, type: type)
+            }
+        case .keyboard, .clipboard, .file, .system, .quality:
             throw DecodeError.unknownType(category: category, type: type)
         }
     }

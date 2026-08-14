@@ -218,10 +218,28 @@ final class HostSessionManager: ObservableObject {
         }
     }
 
-    /// Nothing decodes to a real feature yet on the control channel — video
-    /// has its own dedicated connection and handler (`streamVideo`); input
-    /// and keyboard (Phase 4/5) will decode here.
-    private func handleAuthenticatedMessage(_ message: ProtocolMessage, from deviceID: UUID) {}
+    /// Video has its own dedicated connection and handler (`streamVideo`);
+    /// everything else authenticated devices send arrives here.
+    private func handleAuthenticatedMessage(_ message: ProtocolMessage, from deviceID: UUID) {
+        switch message {
+        case .mouseMove(let payload):
+            MouseController.move(to: payload.position)
+        case .mouseButton(let payload):
+            if payload.isDown {
+                MouseController.buttonDown(at: payload.position, button: payload.button)
+            } else {
+                MouseController.buttonUp(at: payload.position, button: payload.button)
+            }
+        case .mouseDragged(let payload):
+            MouseController.dragged(to: payload.position, button: payload.button)
+        case .mouseClick(let payload):
+            MouseController.click(at: payload.position, button: payload.button, count: payload.clickCount)
+        case .scroll(let payload):
+            MouseController.scroll(deltaX: payload.deltaX, deltaY: payload.deltaY)
+        default:
+            break
+        }
+    }
 
     private func registerPeer(_ hello: HelloPayload) {
         let peer = ConnectedPeer(id: hello.deviceID, name: hello.deviceName, model: hello.deviceModel, connectedAt: Date(), state: .connected)

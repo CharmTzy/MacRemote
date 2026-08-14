@@ -15,8 +15,6 @@ final class DeviceSessionViewModel: ObservableObject {
     @Published private(set) var pairingErrorMessage: String?
     @Published private(set) var isSubmittingCode = false
 
-    /// Kept for later phases (video/input/etc.) to send authenticated
-    /// traffic over — nothing consumes this yet.
     private(set) var activeSession: SecureSession?
     private(set) var macDeviceID: UUID?
 
@@ -65,6 +63,21 @@ final class DeviceSessionViewModel: ObservableObject {
 
     func cancelPairing() {
         disconnect()
+    }
+
+    /// Fire-and-forget send for input (mouse/keyboard) — these are
+    /// high-frequency and the UI has nothing useful to do with a
+    /// per-message failure beyond noting it in the log. Requires an active,
+    /// authenticated connection; silently does nothing otherwise.
+    func sendInput(_ message: ProtocolMessage) {
+        guard connectionState == .connected, let connection else { return }
+        Task {
+            do {
+                try await connection.send(message)
+            } catch {
+                Logging.input.error("Failed to send input: \(String(describing: error), privacy: .public)")
+            }
+        }
     }
 
     func disconnect() {

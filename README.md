@@ -24,16 +24,18 @@ list). What exists right now:
       on the iPhone. **Written but not yet run on real hardware** — see the
       note below, and ARCHITECTURE.md's "Video pipeline" section for which
       two files carry the most risk.
-- [ ] Phase 4 — Mouse/trackpad control
+- [x] Phase 4 — Direct-touch mouse control on the video view: tap (click),
+      double tap, long-press (right click), drag, two-finger scroll, all
+      mapped through normalized coordinates and posted as `CGEvent`s.
 - [ ] Phase 5 — Keyboard input and shortcuts
 - [ ] Phase 6 — Full product UX (settings, monitor picker, remote toolbar)
 - [ ] Phase 7 — Clipboard sync, file transfer, media/system commands, reconnection
 - [ ] Phase 8 — Performance tuning and test coverage
 
-**Remote control (mouse/keyboard) doesn't work yet.** A paired iPhone can
-now watch a live view of the Mac's primary display — tap "View Screen" on
-a connected Mac's detail screen — but can't yet interact with it. See the
-phase list above for what's next.
+**Keyboard input doesn't work yet.** A paired iPhone can watch a live view
+of the Mac's primary display and control the cursor directly by touching
+it — tap "View Screen" on a connected Mac's detail screen. See the phase
+list above for what's next.
 
 **A note on verification:** this codebase was written in an environment
 without Xcode or the Swift/Apple toolchain available, so `xcodegen generate`

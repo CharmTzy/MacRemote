@@ -216,6 +216,18 @@ actor RemoteConnection {
         return nil
     }
 
+    /// Seals and sends one message over the authenticated session. Only
+    /// meaningful after `connect(to:)` / `submitPairingCode(_:)` returned
+    /// `.authenticated`.
+    func send(_ message: ProtocolMessage) async throws {
+        guard let transport, var session = activeSession else {
+            throw ConnectionError.connectionClosed
+        }
+        let sealed = try session.seal(message.encodedInner())
+        activeSession = session
+        try await transport.send(.secureEnvelope(SealedPayload(counter: sealed.counter, combined: sealed.combined)))
+    }
+
     func close() async {
         await transport?.close()
         transport = nil
