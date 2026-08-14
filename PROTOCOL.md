@@ -40,7 +40,7 @@ hands you, get back zero or more complete, decoded messages.
 | `session` | 2 | Hello / HelloAck (implemented) |
 | `video` | 3 | Encoded frame data (implemented) |
 | `input` | 4 | Mouse/touch/trackpad events (implemented) |
-| `keyboard` | 5 | Key events, modifiers, text input (Phase 5) |
+| `keyboard` | 5 | Key events, modifiers, text input (implemented) |
 | `clipboard` | 6 | Clipboard sync (Phase 7) |
 | `file` | 7 | File transfer chunks/metadata (Phase 7) |
 | `system` | 8 | Mac shortcuts: lock, sleep, media keys (Phase 7) |
@@ -261,6 +261,35 @@ Scroll        Float deltaX, Float deltaY
 or a long-press-as-right-click) sent as one atomic message; `MouseButton`
 + `MouseDragged` + `MouseButton` bracket an actual drag, matching the
 down/dragged/up shape `CGEvent` itself expects on the Mac side.
+
+### `keyboard` / TextInput (type 1)
+
+Literal text, injected as Unicode on the Mac (see `KeyboardController.
+typeText`) — not usable for shortcuts, since Unicode injection types
+characters rather than invoking key-event-driven menu commands.
+
+```
+String   text
+```
+
+### `keyboard` / SpecialKey (type 2)
+
+Everything that needs a real key-code-level event: navigation/editing
+keys, function keys, and — combined with modifiers — shortcuts.
+
+```
+UInt8   key         (SpecialKey raw value — see Shared/Protocol/SpecialKey.swift)
+UInt8   modifiers    (KeyModifiers bitmask: 1=⌘ 2=⌥ 4=⌃ 8=⇧)
+Bool    isDown
+```
+
+`SpecialKey` is deliberately not macOS's own virtual key codes — it's a
+small platform-neutral set (navigation, F1-F12, a-z, 0-9) that
+`MacHost/InputControl/VirtualKeyCode.swift` maps to the real `CGKeyCode`
+values. Modifiers are "armed" by tapping ⌘/⌥/⌃/⇧ on the iPhone's keyboard
+accessory bar and consumed by the next key press, then cleared — there's
+no physical key being held down the way there is on a real keyboard, so
+sticky-key-style one-tap-then-act is the natural equivalent.
 
 ## Design rules for future messages
 

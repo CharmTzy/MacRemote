@@ -35,6 +35,11 @@ enum ProtocolMessage: Sendable {
     case mouseClick(MouseClickPayload)
     case mouseDragged(MouseDraggedPayload)
     case scroll(ScrollPayload)
+
+    // Keyboard (Phase 5) — always travels wrapped in secureEnvelope, over
+    // the control connection.
+    case textInput(TextInputPayload)
+    case specialKey(SpecialKeyPayload)
 }
 
 extension ProtocolMessage {
@@ -48,6 +53,8 @@ extension ProtocolMessage {
             return .video
         case .mouseMove, .mouseButton, .mouseClick, .mouseDragged, .scroll:
             return .input
+        case .textInput, .specialKey:
+            return .keyboard
         }
     }
 
@@ -74,6 +81,8 @@ extension ProtocolMessage {
         case .mouseClick: return 3
         case .mouseDragged: return 4
         case .scroll: return 5
+        case .textInput: return 1
+        case .specialKey: return 2
         }
     }
 
@@ -99,6 +108,8 @@ extension ProtocolMessage {
         case .mouseClick(let payload): payload.encode(into: &writer)
         case .mouseDragged(let payload): payload.encode(into: &writer)
         case .scroll(let payload): payload.encode(into: &writer)
+        case .textInput(let payload): payload.encode(into: &writer)
+        case .specialKey(let payload): payload.encode(into: &writer)
         }
         return writer.data
     }
@@ -172,7 +183,13 @@ extension ProtocolMessage {
             case 5: return .scroll(try ScrollPayload.decode(from: &reader))
             default: throw DecodeError.unknownType(category: category, type: type)
             }
-        case .keyboard, .clipboard, .file, .system, .quality:
+        case .keyboard:
+            switch type {
+            case 1: return .textInput(try TextInputPayload.decode(from: &reader))
+            case 2: return .specialKey(try SpecialKeyPayload.decode(from: &reader))
+            default: throw DecodeError.unknownType(category: category, type: type)
+            }
+        case .clipboard, .file, .system, .quality:
             throw DecodeError.unknownType(category: category, type: type)
         }
     }

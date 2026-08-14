@@ -236,6 +236,10 @@ final class HostSessionManager: ObservableObject {
             MouseController.click(at: payload.position, button: payload.button, count: payload.clickCount)
         case .scroll(let payload):
             MouseController.scroll(deltaX: payload.deltaX, deltaY: payload.deltaY)
+        case .textInput(let payload):
+            KeyboardController.typeText(payload.text)
+        case .specialKey(let payload):
+            KeyboardController.sendSpecialKey(payload.key, modifiers: payload.modifiers, isDown: payload.isDown)
         default:
             break
         }

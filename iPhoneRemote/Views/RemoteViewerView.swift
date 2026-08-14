@@ -1,16 +1,18 @@
 import SwiftUI
 import UIKit
 
-/// The screen-mirroring and direct-touch-control view. Phase 4 adds real
-/// input on top of Phase 3's video; the minimal chrome (a single Close
-/// button) is still a placeholder for Phase 6's full remote toolbar
-/// (keyboard, trackpad mode, shortcuts, display picker).
+/// The screen-mirroring and direct-touch-control view. Phase 5 adds
+/// keyboard input on top of Phase 4's mouse control; the minimal chrome
+/// (Close + Keyboard) is still a placeholder for Phase 6's full remote
+/// toolbar (trackpad mode, shortcuts, display picker).
 struct RemoteViewerView: View {
     let mac: DiscoveredMac
     @ObservedObject var controlSession: DeviceSessionViewModel
     @StateObject private var videoSession = VideoSessionViewModel()
+    @StateObject private var keyboardSession = KeyboardInputSession()
     @Environment(\.dismiss) private var dismiss
     @State private var isDragging = false
+    @State private var showingKeyboard = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -48,9 +50,21 @@ struct RemoteViewerView: View {
                     }
                 }
 
+                KeyboardInputView(session: keyboardSession, isPresented: $showingKeyboard)
+
                 VStack {
                     HStack {
+                        Button {
+                            showingKeyboard.toggle()
+                        } label: {
+                            Image(systemName: "keyboard")
+                                .font(.title2)
+                                .foregroundStyle(.white, .black.opacity(0.4))
+                        }
+                        .padding()
+
                         Spacer()
+
                         Button {
                             dismiss()
                         } label: {
@@ -66,7 +80,10 @@ struct RemoteViewerView: View {
         }
         .toolbar(.hidden, for: .navigationBar)
         .statusBarHidden()
-        .onAppear { videoSession.start(endpoint: mac.endpoint) }
+        .onAppear {
+            videoSession.start(endpoint: mac.endpoint)
+            keyboardSession.send = { message in controlSession.sendInput(message) }
+        }
         .onDisappear { videoSession.stop() }
     }
 

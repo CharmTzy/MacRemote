@@ -27,15 +27,19 @@ list). What exists right now:
 - [x] Phase 4 — Direct-touch mouse control on the video view: tap (click),
       double tap, long-press (right click), drag, two-finger scroll, all
       mapped through normalized coordinates and posted as `CGEvent`s.
-- [ ] Phase 5 — Keyboard input and shortcuts
+- [x] Phase 5 — Keyboard: the system keyboard types real text on the Mac
+      (Unicode injection, so autocorrect/emoji/any script works), a
+      keyboard-accessory bar carries ⌘⌥⌃⇧ + esc/tab/arrows, and shortcuts
+      like ⌘C work by arming a modifier then tapping a letter.
 - [ ] Phase 6 — Full product UX (settings, monitor picker, remote toolbar)
 - [ ] Phase 7 — Clipboard sync, file transfer, media/system commands, reconnection
 - [ ] Phase 8 — Performance tuning and test coverage
 
-**Keyboard input doesn't work yet.** A paired iPhone can watch a live view
-of the Mac's primary display and control the cursor directly by touching
-it — tap "View Screen" on a connected Mac's detail screen. See the phase
-list above for what's next.
+**Core remote control now works end to end**: a paired iPhone can watch
+the Mac's screen, control the cursor by touching it, and type on it — tap
+"View Screen" on a connected Mac's detail screen, then the keyboard icon
+to type. What's left is mostly product polish (Phase 6), convenience
+features (Phase 7), and hardening (Phase 8).
 
 **A note on verification:** this codebase was written in an environment
 without Xcode or the Swift/Apple toolchain available, so `xcodegen generate`
