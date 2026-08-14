@@ -13,10 +13,12 @@ CryptoKit) rather than on top of WebRTC or a hosted signaling service.
 This repository is being built in phases (see `ARCHITECTURE.md` for the full
 list). What exists right now:
 
-- [x] Phase 1 — Project foundation, Bonjour discovery, and an authenticated-later
-      Hello/HelloAck handshake over a real TCP connection. The iPhone can
-      discover a Mac, connect to it, and the Mac shows it as connected.
-- [ ] Phase 2 — Pairing, authentication, encrypted sessions
+- [x] Phase 1 — Project foundation, Bonjour discovery, and a Hello/HelloAck
+      handshake over a real TCP connection.
+- [x] Phase 2 — Pairing (numeric code), Ed25519 device identity, signature-based
+      session authentication for returning devices, AES-GCM encrypted
+      post-auth channel, Keychain-backed trusted-device store with revoke.
+      **Written but not yet run on real hardware** — see the note below.
 - [ ] Phase 3 — Live screen streaming (ScreenCaptureKit → VideoToolbox → iPhone)
 - [ ] Phase 4 — Mouse/trackpad control
 - [ ] Phase 5 — Keyboard input and shortcuts
@@ -25,8 +27,15 @@ list). What exists right now:
 - [ ] Phase 8 — Performance tuning and test coverage
 
 **Screen sharing and remote control do not work yet.** Right now this
-repository proves the plumbing: a Mac can be found on the network and
-connected to. See the phase list above for what's next.
+repository proves the plumbing and the security layer: a Mac can be found
+on the network, and an iPhone can pair with it and open an authenticated,
+encrypted session. See the phase list above for what's next.
+
+**A note on verification:** this codebase was written in an environment
+without Xcode or the Swift/Apple toolchain available, so `xcodegen generate`
+and an actual build have not happened yet — see SETUP.md, and treat the
+first real build as the point where remaining compiler errors (if any) get
+found and fixed, not as a formality.
 
 ## Project structure
 
@@ -90,10 +99,14 @@ silently either.
 
 ## Pairing and security
 
-Not implemented yet (Phase 2). Once it lands, see `SECURITY.md` for exactly
-what's protected and what the threat model does and doesn't cover — this is
-a LAN tool for personal devices, not a hardened multi-tenant product, and
-the docs will say so plainly rather than overclaim.
+The first time an iPhone connects to a Mac, the Mac needs "Pair New Device"
+open (Devices tab) showing a 6-digit code, which you enter on the iPhone.
+After that, reconnecting doesn't need the code again — each device proved
+its identity once during pairing and gets recognized automatically from
+then on. See `SECURITY.md` for exactly what's protected and what the threat
+model does and doesn't cover — this is a LAN tool for personal devices, not
+a hardened multi-tenant product, and the docs say so plainly rather than
+overclaim.
 
 ## Troubleshooting
 

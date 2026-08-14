@@ -36,8 +36,8 @@ hands you, get back zero or more complete, decoded messages.
 
 | Category | Byte | Carries |
 |---|---|---|
-| `authentication` | 1 | Pairing handshake, session auth (Phase 2) |
-| `session` | 2 | Hello / HelloAck (Phase 1, implemented) |
+| `authentication` | 1 | Pairing handshake, session auth (implemented) |
+| `session` | 2 | Hello / HelloAck (implemented) |
 | `video` | 3 | Encoded frame data (Phase 3) |
 | `input` | 4 | Mouse/touch/trackpad events (Phase 4) |
 | `keyboard` | 5 | Key events, modifiers, text input (Phase 5) |
@@ -82,10 +82,10 @@ Bool     accepted
 String   reason          (empty string decodes as nil)
 ```
 
-`accepted` is always `true` in Phase 1 — every well-formed Hello from an
-iPhone is accepted. Phase 2 makes this meaningful: a device that isn't
-paired, or whose signature doesn't check out, gets `accepted = false` with
-a human-readable `reason`.
+`accepted` here is just "the handshake itself was well-formed" — it's
+always `true` for a valid Hello from an iPhone speaking the right protocol
+version. The real accept/reject decision happens later, in `authResult`,
+once authentication actually runs.
 
 ### `heartbeat` / Ping, Pong (types 1, 2)
 
@@ -95,6 +95,109 @@ UInt64   timestamp   (milliseconds since epoch, sender's clock)
 
 Implemented and round-trip tested, not yet driven by a periodic timer —
 that lands with Phase 7's connection-loss detection and reconnect logic.
+
+## Authentication sequence
+
+Runs immediately after Hello/HelloAck, before either side does anything
+else. Full design rationale (why code-confirmed pairing, why signatures for
+returning devices, what the threat model does and doesn't cover) is in
+SECURITY.md — this section is just the message-level mechanics.
+
+```
+iPhone                                          Mac
+  │──────────────── hello ────────────────────▶ │
+  │◀─────────────── helloAck ────────────────── │
+  │                                              │  (looks up hello.deviceID
+  │                                              │   in TrustedDeviceStore)
+  │──────────────── authBegin ─────────────────▶ │  (iPhone's ephemeral X25519 key)
+  │◀─────────────── authChallenge ────────────── │  (Mac's ephemeral key + nonce;
+  │                                              │   mode = pairingRequired or
+  │                                              │   sessionAuth; signature only
+  │                                              │   present for sessionAuth)
+  │
+  ├─ if sessionAuth (returning device) ─────────────────────────────────────┤
+  │──────────── sessionAuthResponse ───────────▶ │  (iPhone's signature over
+  │                                              │   the transcript)
+  │◀─────────────── authResult ────────────────  │
+  │
+  ├─ if pairingRequired (first-time device) ─────────────────────────────────┤
+  │  (UI pauses here for the user to type the code shown on the Mac)
+  │──────────────── pairingConfirm ────────────▶ │  (HMAC tag proving iPhone
+  │                                              │   knows the code)
+  │◀─────────────── pairingConfirm ────────────  │  (Mac's tag, proving the same
+  │                                              │   back)
+  │──────────────── identityExchange ──────────▶ │  (iPhone's long-term public
+  │                                              │   key, sealed)
+  │◀─────────────── identityExchange ──────────  │  (Mac's long-term public key,
+  │                                              │   sealed)
+  │◀─────────────── authResult ────────────────  │
+  └───────────────────────────────────────────────────────────────────────────┘
+
+  From here on, every message either side sends is wrapped in
+  secureEnvelope, sealed with the session key this exchange produced.
+```
+
+### `authentication` / AuthBegin (type 1)
+
+```
+Data   ephemeralPublicKey   (32 bytes, X25519)
+```
+
+### `authentication` / AuthChallenge (type 2)
+
+```
+UInt8  mode                 (1 = pairingRequired, 2 = sessionAuth)
+Data   ephemeralPublicKey   (32 bytes, X25519, Mac's)
+Data   nonce                (16 bytes; HKDF salt for every key this session derives)
+Data   signature            (empty for pairingRequired; Ed25519 signature for sessionAuth)
+```
+
+### `authentication` / SessionAuthResponse (type 3)
+
+`sessionAuth` path only.
+
+```
+Data   signature   (iPhone's Ed25519 signature over the transcript)
+```
+
+### `authentication` / PairingConfirm (type 4)
+
+`pairingRequired` path only. Sent by the iPhone first, then by the Mac.
+
+```
+Data   confirmTag   (HMAC-SHA256, see PairingCrypto.confirmTag)
+```
+
+### `authentication` / IdentityExchange (type 5)
+
+`pairingRequired` path only, sent by both sides once pairingConfirm
+matches in both directions.
+
+```
+UInt64   counter    (SecureSession send counter, starts at 1)
+Data     combined   (AES-GCM sealed box: nonce + ciphertext + tag, containing
+                      a PairingIdentityPlaintext — long-term public key +
+                      device name + model)
+```
+
+### `authentication` / AuthResult (type 6)
+
+Sent by the Mac only — it holds the trust records, so it makes the final
+call. Terminates both paths.
+
+```
+Bool     accepted
+String   reason   (empty string decodes as nil)
+```
+
+### `authentication` / SecureEnvelope (type 7)
+
+Every message sent after `authResult(accepted: true)`. Same shape as
+`IdentityExchange` (`counter` + `combined`), but the sealed plaintext is a
+*full inner message* — its own category + type + payload, unframed (see
+`ProtocolMessage.encodedInner()` / `decodeInner(_:)`). No feature sends
+anything through this yet; it exists so Phase 3+ has an encrypted channel
+ready to use rather than needing to invent one under time pressure.
 
 ## Design rules for future messages
 

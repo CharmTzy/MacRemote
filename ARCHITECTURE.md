@@ -92,7 +92,7 @@ rationale. The short version: `[UInt32 length][UInt8 category][UInt8
 type][payload]`, decoded incrementally by `FrameParser` as TCP data arrives
 in arbitrary-sized chunks.
 
-## Discovery and connection flow (Phase 1)
+## Discovery, connection, and authentication flow
 
 ```
 Mac launches
@@ -112,16 +112,31 @@ User taps a Mac
   → RemoteConnection dials the Mac's NWEndpoint.service directly
     (Network.framework resolves the Bonjour endpoint internally — no
     separate NWEndpoint.hostPort resolution step needed)
-  → on .ready, sends HelloPayload
-  → Mac's HostSessionManager receives Hello, currently always accepts,
-    replies HelloAck
-  → both sides now show "Connected"
+  → on .ready, sends HelloPayload; Mac replies HelloAck (still just an
+    identification exchange — see below for what actually gates access)
+  → RemoteConnection runs the authentication phase against
+    HostSessionManager's HostAuthenticator:
+      - known device (in TrustedDeviceStore)  → signature challenge/response
+      - unknown device                        → RemoteConnection.connect(to:)
+        returns .pairingCodeNeeded; DeviceSessionViewModel surfaces
+        PairingCodeView; submitPairingCode(_:) resumes the same connection
+  → on success, both sides hold a SecureSession (AES-GCM key) and the peer's
+    verified identity — this is what "Connected" actually means
 ```
 
-Nothing here is authenticated yet — that is exactly what Phase 2 adds.
-`HelloAckPayload.accepted` already exists as a field so the transport
-doesn't need to change shape when the host starts actually rejecting
-unpaired devices.
+Full message-by-message sequence, including exactly which side sends what
+and why, is in PROTOCOL.md's "Authentication sequence" section; the
+cryptographic reasoning behind each step is in SECURITY.md.
+
+One deliberate consequence of pairing needing user input (the code) mid-
+handshake: `RemoteConnection` can't be one straight-line `async` function
+the way `MessageTransport` is. It holds an `AsyncStream` iterator as actor
+state between `connect(to:)` returning `.pairingCodeNeeded` and
+`submitPairingCode(_:)` being called later, once the person typing the code
+gets around to it — see the doc comment on `RemoteConnection` for why that
+iterator has to be threaded through by hand rather than re-derived from
+`transport.events` each time (`AsyncStream` doesn't support more than one
+live consumer).
 
 ## Why not WebRTC
 

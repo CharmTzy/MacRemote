@@ -1,13 +1,24 @@
 import Foundation
 import Network
+import OSLog
+import Combine
 
-/// Drives the connection lifecycle for one Mac from the iPhone side. Owns a
+/// Drives the connection lifecycle for one Mac from the iPhone side,
+/// including pausing for a pairing code when the Mac requires one. Owns a
 /// `RemoteConnection`, translates its outcome into `ConnectionState`, and
-/// produces a user-facing error message rather than a raw `Error`.
+/// produces user-facing error messages rather than raw `Error`s.
 @MainActor
 final class DeviceSessionViewModel: ObservableObject {
     @Published private(set) var connectionState: ConnectionState = .available
     @Published private(set) var lastErrorMessage: String?
+    @Published private(set) var pairingCodeNeeded = false
+    @Published private(set) var pairingErrorMessage: String?
+    @Published private(set) var isSubmittingCode = false
+
+    /// Kept for later phases (video/input/etc.) to send authenticated
+    /// traffic over — nothing consumes this yet.
+    private(set) var activeSession: SecureSession?
+    private(set) var macDeviceID: UUID?
 
     private var connection: RemoteConnection?
     private var connectTask: Task<Void, Never>?
@@ -16,15 +27,16 @@ final class DeviceSessionViewModel: ObservableObject {
         guard connectionState != .connecting, connectionState != .connected else { return }
         connectionState = .connecting
         lastErrorMessage = nil
+        pairingCodeNeeded = false
+        pairingErrorMessage = nil
 
         let newConnection = RemoteConnection()
         connection = newConnection
 
         connectTask = Task {
             do {
-                try await newConnection.connect(to: endpoint)
-                self.connectionState = .connected
-                Logging.session.info("Connected to \(displayName, privacy: .public)")
+                let result = try await newConnection.connect(to: endpoint)
+                self.handle(result: result, displayName: displayName)
             } catch {
                 self.connectionState = .authenticationFailed
                 self.lastErrorMessage = "Couldn't Connect to Mac. Make sure both devices are on the same Wi-Fi network."
@@ -33,12 +45,52 @@ final class DeviceSessionViewModel: ObservableObject {
         }
     }
 
+    func submitPairingCode(_ code: String) {
+        guard let connection else { return }
+        pairingErrorMessage = nil
+        isSubmittingCode = true
+
+        Task {
+            do {
+                let result = try await connection.submitPairingCode(code)
+                self.isSubmittingCode = false
+                self.handle(result: result, displayName: nil)
+            } catch {
+                self.isSubmittingCode = false
+                self.pairingErrorMessage = (error as? LocalizedError)?.errorDescription ?? "Couldn't complete pairing."
+                Logging.session.error("Pairing failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
+    func cancelPairing() {
+        disconnect()
+    }
+
     func disconnect() {
         connectTask?.cancel()
         let connectionToClose = connection
         connection = nil
+        activeSession = nil
+        macDeviceID = nil
         Task { await connectionToClose?.close() }
         connectionState = .available
         lastErrorMessage = nil
+        pairingCodeNeeded = false
+        pairingErrorMessage = nil
+        isSubmittingCode = false
+    }
+
+    private func handle(result: RemoteConnection.ConnectResult, displayName: String?) {
+        switch result {
+        case .authenticated(let session, let macDeviceID, let macName, _):
+            activeSession = session
+            self.macDeviceID = macDeviceID
+            pairingCodeNeeded = false
+            connectionState = .connected
+            Logging.session.info("Connected to \(displayName ?? macName, privacy: .public)")
+        case .pairingCodeNeeded:
+            pairingCodeNeeded = true
+        }
     }
 }

@@ -1,20 +1,29 @@
 import Foundation
 import Network
 import OSLog
+import Combine
 
 /// Owns the Mac's listening socket: advertises this Mac over Bonjour,
-/// accepts incoming control connections, and performs the Hello/HelloAck
-/// handshake. Phase 1 accepts every well-formed Hello — pairing and
-/// authentication (Phase 2) will make `handleHello` actually reject
-/// untrusted devices.
+/// accepts incoming control connections, and runs each one through the
+/// Hello handshake and then `HostAuthenticator`. A connection that comes
+/// out the other side authenticated gets its `SecureSession` kept alive for
+/// the rest of the connection's lifetime, sealing every message from that
+/// point on.
 @MainActor
 final class HostSessionManager: ObservableObject {
     @Published private(set) var connectedPeers: [ConnectedPeer] = []
     @Published private(set) var isAdvertising = false
     @Published private(set) var lastError: String?
 
+    let pairingCoordinator: PairingCoordinator
+    private let trustedDevices = TrustedDeviceStore()
+
     private var listener: NWListener?
     private static let listenerQueue = DispatchQueue(label: "com.macremote.host.listener")
+
+    init(pairingCoordinator: PairingCoordinator = PairingCoordinator()) {
+        self.pairingCoordinator = pairingCoordinator
+    }
 
     func start() {
         guard listener == nil else { return }
@@ -55,6 +64,22 @@ final class HostSessionManager: ObservableObject {
         connectedPeers.removeAll()
     }
 
+    /// Removes a paired device's trust record. It will need to pair again
+    /// (with a fresh code) before it can connect.
+    func forgetDevice(id: UUID) {
+        try? trustedDevices.remove(deviceID: id)
+        connectedPeers.removeAll { $0.id == id }
+    }
+
+    func forgetAllDevices() {
+        try? trustedDevices.removeAll()
+        connectedPeers.removeAll()
+    }
+
+    func pairedDevices() -> [PairedDeviceRecord] {
+        trustedDevices.all()
+    }
+
     private func handleListenerState(_ state: NWListener.State) {
         switch state {
         case .ready:
@@ -79,55 +104,97 @@ final class HostSessionManager: ObservableObject {
         Logging.session.info("Incoming connection from \(connection.endpoint.debugDescription, privacy: .public)")
 
         Task { [weak self] in
-            var acceptedDeviceID: UUID?
+            guard let self else { return }
+
             let stream = await transport.events
-            for await event in stream {
-                guard let self else { return }
-                switch event {
-                case .ready:
-                    continue
-                case .message(let message):
-                    guard case .hello(let hello) = message, acceptedDeviceID == nil else { continue }
-                    acceptedDeviceID = hello.deviceID
-                    await self.handleHello(hello, transport: transport)
-                case .failed(let reason):
-                    Logging.network.notice("Peer connection ended: \(reason, privacy: .public)")
-                    if let id = acceptedDeviceID { self.removePeer(id: id) }
-                    return
-                case .cancelled:
-                    if let id = acceptedDeviceID { self.removePeer(id: id) }
-                    return
-                }
+            var iterator = stream.makeAsyncIterator()
+
+            guard let hello = await Self.awaitHello(&iterator) else {
+                await transport.close()
+                return
+            }
+
+            try? await transport.send(.helloAck(HelloAckPayload(
+                protocolVersion: ProtocolVersion.current,
+                deviceID: DeviceIdentity.localDeviceID(),
+                deviceName: DeviceIdentity.localDeviceName,
+                deviceModel: DeviceIdentity.localDeviceModel,
+                accepted: true,
+                reason: nil
+            )))
+
+            guard hello.deviceKind == .iPhone, hello.protocolVersion == ProtocolVersion.current else {
+                await transport.close()
+                return
+            }
+
+            let authenticator = HostAuthenticator(trustedDevices: self.trustedDevices, pairingCoordinator: self.pairingCoordinator)
+            let outcome = await authenticator.authenticate(hello: hello, transport: transport, iterator: &iterator)
+
+            switch outcome {
+            case .authenticated(var session):
+                self.registerPeer(hello)
+                await self.pumpAuthenticatedTraffic(deviceID: hello.deviceID, transport: transport, iterator: &iterator, session: &session)
+                self.removePeer(id: hello.deviceID)
+            case .rejected(let reason):
+                Logging.session.notice("Rejected \(hello.deviceName, privacy: .public): \(reason, privacy: .public)")
+                await transport.close()
             }
         }
     }
 
-    private func handleHello(_ hello: HelloPayload, transport: MessageTransport) async {
-        guard hello.deviceKind == .iPhone else {
-            Logging.session.notice("Rejecting Hello from a non-iPhone device kind.")
-            return
+    private static func awaitHello(_ iterator: inout AsyncStream<TransportEvent>.Iterator) async -> HelloPayload? {
+        while let event = await iterator.next() {
+            switch event {
+            case .message(let message):
+                if case .hello(let hello) = message { return hello }
+            case .failed, .cancelled:
+                return nil
+            case .ready:
+                continue
+            }
         }
+        return nil
+    }
 
-        let ack = HelloAckPayload(
-            protocolVersion: ProtocolVersion.current,
-            deviceID: DeviceIdentity.localDeviceID(),
-            deviceName: DeviceIdentity.localDeviceName,
-            deviceModel: DeviceIdentity.localDeviceModel,
-            accepted: true,
-            reason: nil
-        )
-
-        do {
-            try await transport.send(.helloAck(ack))
-        } catch {
-            Logging.network.error("Failed to send HelloAck: \(String(describing: error), privacy: .public)")
-            return
+    /// Keeps a connection alive after authentication, decrypting any
+    /// `secureEnvelope` traffic it sends. No feature sends anything over
+    /// this yet (that starts in later phases) — this loop's job for now is
+    /// just to detect disconnection and keep the peer's `SecureSession`
+    /// ready for when one does.
+    private func pumpAuthenticatedTraffic(
+        deviceID: UUID,
+        transport: MessageTransport,
+        iterator: inout AsyncStream<TransportEvent>.Iterator,
+        session: inout SecureSession
+    ) async {
+        while let event = await iterator.next() {
+            switch event {
+            case .message(let message):
+                guard case .secureEnvelope(let sealed) = message else { continue }
+                guard let plaintext = try? session.open(counter: sealed.counter, combined: sealed.combined),
+                      let inner = try? ProtocolMessage.decodeInner(plaintext) else {
+                    Logging.security.error("Dropping unreadable secure envelope from \(deviceID.uuidString, privacy: .public)")
+                    continue
+                }
+                handleAuthenticatedMessage(inner, from: deviceID)
+            case .failed, .cancelled:
+                return
+            case .ready:
+                continue
+            }
         }
+    }
 
+    /// Nothing decodes to a real feature yet — Phase 3+ adds video/input/
+    /// keyboard handling here.
+    private func handleAuthenticatedMessage(_ message: ProtocolMessage, from deviceID: UUID) {}
+
+    private func registerPeer(_ hello: HelloPayload) {
         let peer = ConnectedPeer(id: hello.deviceID, name: hello.deviceName, model: hello.deviceModel, connectedAt: Date(), state: .connected)
         connectedPeers.removeAll { $0.id == peer.id }
         connectedPeers.append(peer)
-        Logging.session.info("Accepted session from \(hello.deviceName, privacy: .public)")
+        Logging.session.info("Authenticated session with \(hello.deviceName, privacy: .public)")
     }
 
     private func removePeer(id: UUID) {

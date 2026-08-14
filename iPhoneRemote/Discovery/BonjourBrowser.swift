@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import OSLog
 
 enum BrowserEvent: Sendable {
     case resultsChanged(Set<NWBrowser.Result>)

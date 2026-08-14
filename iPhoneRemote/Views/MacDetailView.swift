@@ -4,6 +4,7 @@ import Network
 struct MacDetailView: View {
     let mac: DiscoveredMac
     @StateObject private var session = DeviceSessionViewModel()
+    @State private var showingForgetConfirmation = false
 
     var body: some View {
         List {
@@ -51,9 +52,37 @@ struct MacDetailView: View {
                 }
                 .disabled(session.connectionState == .connecting)
             }
+
+            if session.macDeviceID != nil {
+                Section {
+                    Button("Forget This Mac", role: .destructive) {
+                        showingForgetConfirmation = true
+                    }
+                }
+            }
         }
         .navigationTitle(mac.name)
         .navigationBarTitleDisplayMode(.inline)
+        .sheet(isPresented: Binding(
+            get: { session.pairingCodeNeeded },
+            set: { if !$0 { session.cancelPairing() } }
+        )) {
+            PairingCodeView(session: session, macName: mac.name)
+        }
+        .confirmationDialog(
+            "Forget \(mac.name)?",
+            isPresented: $showingForgetConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("Forget This Mac", role: .destructive) {
+                if let deviceID = session.macDeviceID {
+                    session.disconnect()
+                    try? TrustedDeviceStore().remove(deviceID: deviceID)
+                }
+            }
+        } message: {
+            Text("Your iPhone will need to pair with this Mac again before it can connect.")
+        }
     }
 }
 

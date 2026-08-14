@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import Combine
 
 @MainActor
 final class DiscoveryViewModel: ObservableObject {
