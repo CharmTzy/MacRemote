@@ -3,6 +3,7 @@ import SwiftUI
 struct MacsListView: View {
     @StateObject private var discovery = DiscoveryViewModel()
     @State private var showingAddByIP = false
+    @State private var showingSettings = false
 
     var body: some View {
         NavigationStack {
@@ -38,8 +39,20 @@ struct MacsListView: View {
             .navigationDestination(for: DiscoveredMac.self) { mac in
                 MacDetailView(mac: mac)
             }
+            .toolbar {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button {
+                        showingSettings = true
+                    } label: {
+                        Image(systemName: "gearshape")
+                    }
+                }
+            }
             .sheet(isPresented: $showingAddByIP) {
                 AddByIPView()
+            }
+            .sheet(isPresented: $showingSettings) {
+                SettingsView()
             }
             .onAppear { discovery.start() }
             .onDisappear { discovery.stop() }

@@ -5,35 +5,102 @@ import OSLog
 
 /// Bridges screen capture and encoding to the network for one video
 /// connection: owns a `ScreenCaptureSession` and `H264Encoder`, and pushes
-/// `videoConfig`/`videoFrame` messages — sealed with the connection's
-/// `SecureSession` — as encoded frames arrive. One instance per video
-/// connection; stop it when the connection closes.
+/// `videoConfig`/`videoFrame`/`displayList` messages — sealed with the
+/// connection's `SecureSession` — as encoded frames arrive. One instance
+/// per video connection; stop it when the connection closes.
+///
+/// Also decodes incoming traffic on the same connection (`selectDisplay`)
+/// — video is mostly one-directional, but display switching needs a way
+/// back, and reusing this connection avoids a second handshake for it.
 actor VideoStreamer {
     private let transport: MessageTransport
     private var session: SecureSession
-    private let captureSession = ScreenCaptureSession()
+    private var captureSession = ScreenCaptureSession()
     private var encoder: H264Encoder?
+    private var currentDisplayID: CGDirectDisplayID?
+    private var currentQuality: QualityProfile = .balanced
 
     init(transport: MessageTransport, session: SecureSession) {
         self.transport = transport
         self.session = session
     }
 
-    func start(frameRate: Int = 30) async {
+    func start() async {
         guard PermissionsChecker.isScreenRecordingGranted() else {
             await sendError("Screen Recording isn't allowed for Mac Remote yet. Grant it in the Permissions tab, then reconnect.")
             return
         }
-        guard let display = try? await DisplayCatalog.primaryDisplay() else {
+
+        let displays = (try? await DisplayCatalog.availableDisplays()) ?? []
+        await sendSealed(.displayList(DisplayListPayload(displays: displays.map {
+            DisplayDescriptor(id: UInt32($0.id), width: UInt32($0.width), height: UInt32($0.height), isMain: $0.isMain, name: $0.name)
+        })))
+
+        guard let primary = displays.first(where: { $0.isMain }) ?? displays.first else {
             await sendError("No display is available to capture.")
             return
         }
+
+        await startCapturing(displayID: primary.id)
+    }
+
+    /// Switches to a different display without tearing down the
+    /// connection: stops the current capture/encoder and starts fresh
+    /// against the new display, sending an updated `VideoConfig` for its
+    /// resolution.
+    func selectDisplay(id: CGDirectDisplayID) async {
+        guard id != currentDisplayID else { return }
+        await captureSession.stop()
+        encoder?.stop()
+        encoder = nil
+        await startCapturing(displayID: id)
+    }
+
+    /// Applies a new quality profile (bitrate + frame rate target) by
+    /// restarting capture/encoding against the currently-selected display.
+    func applyQuality(_ profile: QualityProfile) async {
+        guard profile != currentQuality, let displayID = currentDisplayID else {
+            currentQuality = profile
+            return
+        }
+        currentQuality = profile
+        await captureSession.stop()
+        encoder?.stop()
+        encoder = nil
+        await startCapturing(displayID: displayID)
+    }
+
+    /// Decrypts an incoming message on this same connection (the iPhone's
+    /// only uses for this so far are `selectDisplay` and
+    /// `qualityPreference`).
+    func decodeIncoming(_ sealed: SealedPayload) -> ProtocolMessage? {
+        guard let plaintext = try? session.open(counter: sealed.counter, combined: sealed.combined) else { return nil }
+        return try? ProtocolMessage.decodeInner(plaintext)
+    }
+
+    func stop() async {
+        await captureSession.stop()
+        encoder?.stop()
+        encoder = nil
+    }
+
+    private func startCapturing(displayID: CGDirectDisplayID) async {
+        guard let display = try? await DisplayCatalog.scDisplay(for: displayID) else {
+            await sendError("That display is no longer available.")
+            return
+        }
+
+        currentDisplayID = displayID
+        captureSession = ScreenCaptureSession()
+        let quality = currentQuality
 
         let newEncoder = H264Encoder(width: Int32(display.width), height: Int32(display.height))
         encoder = newEncoder
 
         do {
             try newEncoder.start(
+                averageBitRate: quality.averageBitRate,
+                expectedFrameRate: quality.frameRate,
                 onParameterSets: { [weak self] sps, pps in
                     Task { await self?.sendConfig(width: display.width, height: display.height, sps: sps, pps: pps) }
                 },
@@ -50,7 +117,7 @@ actor VideoStreamer {
         do {
             try await captureSession.start(
                 display: display,
-                frameRate: frameRate,
+                frameRate: quality.frameRate,
                 onFrame: { [weak self] pixelBuffer, timestamp in
                     Task { await self?.encodeFrame(pixelBuffer, timestamp: timestamp) }
                 },
@@ -63,12 +130,6 @@ actor VideoStreamer {
             Logging.capture.error("Couldn't start capture: \(String(describing: error), privacy: .public)")
             await sendError("Couldn't start screen capture. Check Screen Recording permission in System Settings.")
         }
-    }
-
-    func stop() async {
-        await captureSession.stop()
-        encoder?.stop()
-        encoder = nil
     }
 
     private func encodeFrame(_ pixelBuffer: CVPixelBuffer, timestamp: CMTime) {

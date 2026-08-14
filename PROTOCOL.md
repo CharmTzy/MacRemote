@@ -45,7 +45,7 @@ hands you, get back zero or more complete, decoded messages.
 | `file` | 7 | File transfer chunks/metadata (Phase 7) |
 | `system` | 8 | Mac shortcuts: lock, sleep, media keys (Phase 7) |
 | `heartbeat` | 9 | Ping/pong (implemented; not yet driven by a timer) |
-| `quality` | 10 | Adaptive streaming stats/profile changes (Phase 8) |
+| `quality` | 10 | Streaming quality (manual selection implemented; automatic adjustment is Phase 8) |
 
 A category existing in this table does not mean it has message types yet —
 `ProtocolMessage` only defines cases for what's actually implemented.
@@ -290,6 +290,37 @@ values. Modifiers are "armed" by tapping ⌘/⌥/⌃/⇧ on the iPhone's keyboar
 accessory bar and consumed by the next key press, then cleared — there's
 no physical key being held down the way there is on a real keyboard, so
 sticky-key-style one-tap-then-act is the natural equivalent.
+
+### `video` / DisplayList (type 4), SelectDisplay (type 5)
+
+`DisplayList` is sent once a video connection starts streaming (and again
+if the display set changes); `SelectDisplay` is sent back by the iPhone to
+switch which display it's watching, without a reconnect. Both wrapped in
+`secureEnvelope`.
+
+```
+DisplayList     UInt8 count, then count × {
+                  UInt32 id, UInt32 width, UInt32 height, Bool isMain, String name
+                }
+SelectDisplay   UInt32 displayID
+```
+
+### `quality` / QualityPreference (type 1)
+
+Sent by the iPhone once when a video connection starts (from its saved
+Settings preference) and again whenever the user changes Quality in
+Settings. The Mac restarts capture/encoding at the new bitrate and frame
+rate target — display resolution is always native, only encode quality
+changes.
+
+```
+UInt8   profile   (1=auto 2=low 3=balanced 4=high — see Shared/Models/QualityProfile.swift)
+```
+
+`.auto` currently just uses `.balanced`'s numbers. Genuinely automatic,
+network-condition-aware adjustment is Phase 8 scope, built as a second
+layer that calls the same `VideoStreamer.applyQuality(_:)` mechanism
+automatically instead of only in response to a user's Settings choice.
 
 ## Design rules for future messages
 

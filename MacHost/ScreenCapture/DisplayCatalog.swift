@@ -12,13 +12,25 @@ enum DisplayCatalog {
         let width: Int
         let height: Int
         let isMain: Bool
+        /// There's no public API for a display's real marketing name
+        /// (ScreenCaptureKit doesn't expose one), so this is a positional
+        /// label ("Main Display", "Display 2", ...) rather than something
+        /// like "LG UltraFine."
+        let name: String
     }
 
     static func availableDisplays() async throws -> [DisplayInfo] {
         let content = try await SCShareableContent.current
         let mainDisplayID = CGMainDisplayID()
-        return content.displays.map { display in
-            DisplayInfo(id: display.displayID, width: display.width, height: display.height, isMain: display.displayID == mainDisplayID)
+        return content.displays.enumerated().map { index, display in
+            let isMain = display.displayID == mainDisplayID
+            return DisplayInfo(
+                id: display.displayID,
+                width: display.width,
+                height: display.height,
+                isMain: isMain,
+                name: isMain ? "Main Display" : "Display \(index + 1)"
+            )
         }
     }
 

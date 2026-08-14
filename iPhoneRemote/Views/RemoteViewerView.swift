@@ -1,10 +1,12 @@
 import SwiftUI
 import UIKit
 
-/// The screen-mirroring and direct-touch-control view. Phase 5 adds
-/// keyboard input on top of Phase 4's mouse control; the minimal chrome
-/// (Close + Keyboard) is still a placeholder for Phase 6's full remote
-/// toolbar (trackpad mode, shortcuts, display picker).
+/// The screen-mirroring and direct-touch-control view — the most
+/// important screen in the app. The video fills the whole screen; the
+/// only persistent chrome is a small translucent toolbar, keyboard and
+/// trackpad get direct buttons since they're used constantly, and
+/// everything else (displays, disconnect) lives behind a single menu
+/// rather than crowding the bar.
 struct RemoteViewerView: View {
     let mac: DiscoveredMac
     @ObservedObject var controlSession: DeviceSessionViewModel
@@ -13,6 +15,9 @@ struct RemoteViewerView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var isDragging = false
     @State private var showingKeyboard = false
+    @State private var showingTrackpad = false
+    @State private var showingDisplayPicker = false
+    @State private var showingDisconnectConfirmation = false
 
     var body: some View {
         GeometryReader { proxy in
@@ -53,28 +58,11 @@ struct RemoteViewerView: View {
                 KeyboardInputView(session: keyboardSession, isPresented: $showingKeyboard)
 
                 VStack {
-                    HStack {
-                        Button {
-                            showingKeyboard.toggle()
-                        } label: {
-                            Image(systemName: "keyboard")
-                                .font(.title2)
-                                .foregroundStyle(.white, .black.opacity(0.4))
-                        }
-                        .padding()
-
-                        Spacer()
-
-                        Button {
-                            dismiss()
-                        } label: {
-                            Image(systemName: "xmark.circle.fill")
-                                .font(.title2)
-                                .foregroundStyle(.white, .black.opacity(0.4))
-                        }
-                        .padding()
-                    }
                     Spacer()
+                    if videoSession.isStreaming {
+                        remoteToolbar
+                            .padding(.bottom, 12)
+                    }
                 }
             }
         }
@@ -85,6 +73,62 @@ struct RemoteViewerView: View {
             keyboardSession.send = { message in controlSession.sendInput(message) }
         }
         .onDisappear { videoSession.stop() }
+        .sheet(isPresented: $showingTrackpad) {
+            TrackpadView(controlSession: controlSession)
+        }
+        .sheet(isPresented: $showingDisplayPicker) {
+            DisplayPickerView(videoSession: videoSession)
+        }
+        .confirmationDialog("Disconnect from \(mac.name)?", isPresented: $showingDisconnectConfirmation, titleVisibility: .visible) {
+            Button("Disconnect", role: .destructive) {
+                controlSession.disconnect()
+                dismiss()
+            }
+        }
+    }
+
+    private var remoteToolbar: some View {
+        HStack(spacing: 28) {
+            Button {
+                showingKeyboard.toggle()
+            } label: {
+                Image(systemName: "keyboard")
+            }
+
+            Button {
+                showingTrackpad = true
+            } label: {
+                Image(systemName: "rectangle.and.hand.point.up.left")
+            }
+
+            Menu {
+                if videoSession.availableDisplays.count > 1 {
+                    Button {
+                        showingDisplayPicker = true
+                    } label: {
+                        Label("Displays", systemImage: "display")
+                    }
+                }
+                Button {
+                    dismiss()
+                } label: {
+                    Label("Close", systemImage: "xmark")
+                }
+                Button(role: .destructive) {
+                    showingDisconnectConfirmation = true
+                } label: {
+                    Label("Disconnect", systemImage: "xmark.circle")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+            }
+        }
+        .font(.title3)
+        .foregroundStyle(.white)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial, in: Capsule())
+        .environment(\.colorScheme, .dark)
     }
 
     private func geometry(for viewSize: CGSize) -> VideoContentGeometry? {

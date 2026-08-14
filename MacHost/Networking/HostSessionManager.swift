@@ -1,5 +1,6 @@
 import Foundation
 import Network
+import CoreGraphics
 import OSLog
 import Combine
 
@@ -150,9 +151,9 @@ final class HostSessionManager: ObservableObject {
     }
 
     /// Starts capturing and encoding once a video connection authenticates,
-    /// and keeps it running until the connection closes. Video is one
-    /// direction only (Mac → iPhone) — this loop's job is purely to notice
-    /// disconnection so capture can stop promptly.
+    /// and keeps it running until the connection closes. Video is mostly
+    /// one direction (Mac → iPhone), but this loop also decodes the
+    /// occasional message back — `selectDisplay` and `qualityPreference`.
     private func streamVideo(
         deviceID: UUID,
         transport: MessageTransport,
@@ -165,10 +166,23 @@ final class HostSessionManager: ObservableObject {
 
         while let event = await iterator.next() {
             switch event {
+            case .message(let message):
+                guard case .secureEnvelope(let sealed) = message,
+                      let inner = await streamer.decodeIncoming(sealed) else {
+                    continue
+                }
+                switch inner {
+                case .selectDisplay(let payload):
+                    await streamer.selectDisplay(id: CGDirectDisplayID(payload.displayID))
+                case .qualityPreference(let payload):
+                    await streamer.applyQuality(payload.profile)
+                default:
+                    break
+                }
             case .failed, .cancelled:
                 await streamer.stop()
                 return
-            case .ready, .message:
+            case .ready:
                 continue
             }
         }

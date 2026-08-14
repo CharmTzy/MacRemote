@@ -3,7 +3,9 @@ import SwiftUI
 enum SidebarSection: String, CaseIterable, Identifiable {
     case overview = "Overview"
     case devices = "Devices"
+    case display = "Display"
     case permissions = "Permissions"
+    case settings = "Settings"
 
     var id: String { rawValue }
 
@@ -11,7 +13,9 @@ enum SidebarSection: String, CaseIterable, Identifiable {
         switch self {
         case .overview: return "macbook"
         case .devices: return "iphone"
+        case .display: return "display"
         case .permissions: return "lock.shield"
+        case .settings: return "gearshape"
         }
     }
 }
@@ -36,8 +40,12 @@ struct ContentView: View {
                 OverviewView().environmentObject(sessionManager)
             case .devices:
                 DevicesView().environmentObject(sessionManager)
+            case .display:
+                DisplayView()
             case .permissions:
                 PermissionsView()
+            case .settings:
+                SettingsView().environmentObject(sessionManager)
             }
         }
         .onAppear { sessionManager.start() }

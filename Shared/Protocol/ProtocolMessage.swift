@@ -27,6 +27,8 @@ enum ProtocolMessage: Sendable {
     case videoConfig(VideoConfigPayload)
     case videoFrame(VideoFramePayload)
     case videoError(VideoErrorPayload)
+    case displayList(DisplayListPayload)
+    case selectDisplay(SelectDisplayPayload)
 
     // Input (Phase 4) — always travels wrapped in secureEnvelope, over the
     // control connection (never video — see ARCHITECTURE.md).
@@ -40,6 +42,10 @@ enum ProtocolMessage: Sendable {
     // the control connection.
     case textInput(TextInputPayload)
     case specialKey(SpecialKeyPayload)
+
+    // Quality (Phase 6 manual selection; Phase 8 adds automatic adjustment
+    // on top of the same mechanism) — sent on the video connection.
+    case qualityPreference(QualityPreferencePayload)
 }
 
 extension ProtocolMessage {
@@ -49,12 +55,14 @@ extension ProtocolMessage {
         case .ping, .pong: return .heartbeat
         case .authBegin, .authChallenge, .sessionAuthResponse, .pairingConfirm, .identityExchange, .authResult, .secureEnvelope:
             return .authentication
-        case .videoConfig, .videoFrame, .videoError:
+        case .videoConfig, .videoFrame, .videoError, .displayList, .selectDisplay:
             return .video
         case .mouseMove, .mouseButton, .mouseClick, .mouseDragged, .scroll:
             return .input
         case .textInput, .specialKey:
             return .keyboard
+        case .qualityPreference:
+            return .quality
         }
     }
 
@@ -76,6 +84,8 @@ extension ProtocolMessage {
         case .videoConfig: return 1
         case .videoFrame: return 2
         case .videoError: return 3
+        case .displayList: return 4
+        case .selectDisplay: return 5
         case .mouseMove: return 1
         case .mouseButton: return 2
         case .mouseClick: return 3
@@ -83,6 +93,7 @@ extension ProtocolMessage {
         case .scroll: return 5
         case .textInput: return 1
         case .specialKey: return 2
+        case .qualityPreference: return 1
         }
     }
 
@@ -103,6 +114,8 @@ extension ProtocolMessage {
         case .videoConfig(let payload): payload.encode(into: &writer)
         case .videoFrame(let payload): payload.encode(into: &writer)
         case .videoError(let payload): payload.encode(into: &writer)
+        case .displayList(let payload): payload.encode(into: &writer)
+        case .selectDisplay(let payload): payload.encode(into: &writer)
         case .mouseMove(let payload): payload.encode(into: &writer)
         case .mouseButton(let payload): payload.encode(into: &writer)
         case .mouseClick(let payload): payload.encode(into: &writer)
@@ -110,6 +123,7 @@ extension ProtocolMessage {
         case .scroll(let payload): payload.encode(into: &writer)
         case .textInput(let payload): payload.encode(into: &writer)
         case .specialKey(let payload): payload.encode(into: &writer)
+        case .qualityPreference(let payload): payload.encode(into: &writer)
         }
         return writer.data
     }
@@ -172,6 +186,8 @@ extension ProtocolMessage {
             case 1: return .videoConfig(try VideoConfigPayload.decode(from: &reader))
             case 2: return .videoFrame(try VideoFramePayload.decode(from: &reader))
             case 3: return .videoError(try VideoErrorPayload.decode(from: &reader))
+            case 4: return .displayList(try DisplayListPayload.decode(from: &reader))
+            case 5: return .selectDisplay(try SelectDisplayPayload.decode(from: &reader))
             default: throw DecodeError.unknownType(category: category, type: type)
             }
         case .input:
@@ -189,7 +205,12 @@ extension ProtocolMessage {
             case 2: return .specialKey(try SpecialKeyPayload.decode(from: &reader))
             default: throw DecodeError.unknownType(category: category, type: type)
             }
-        case .clipboard, .file, .system, .quality:
+        case .quality:
+            switch type {
+            case 1: return .qualityPreference(try QualityPreferencePayload.decode(from: &reader))
+            default: throw DecodeError.unknownType(category: category, type: type)
+            }
+        case .clipboard, .file, .system:
             throw DecodeError.unknownType(category: category, type: type)
         }
     }

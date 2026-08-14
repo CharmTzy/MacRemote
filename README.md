@@ -31,7 +31,14 @@ list). What exists right now:
       (Unicode injection, so autocorrect/emoji/any script works), a
       keyboard-accessory bar carries ⌘⌥⌃⇧ + esc/tab/arrows, and shortcuts
       like ⌘C work by arming a modifier then tapping a letter.
-- [ ] Phase 6 — Full product UX (settings, monitor picker, remote toolbar)
+- [x] Phase 6 — Product UX: Trackpad mode (relative movement, alongside
+      Direct Touch), a compact translucent remote toolbar, a live
+      multi-display picker (switching doesn't reconnect), and real Settings
+      on both apps (Quality actually changes the encoder's bitrate/frame
+      rate; paired-device management; trackpad sensitivity/natural
+      scrolling). No onboarding carousel — the pairing and permissions
+      flows already guide a first run, and the spec's own guidance is to
+      keep onboarding short.
 - [ ] Phase 7 — Clipboard sync, file transfer, media/system commands, reconnection
 - [ ] Phase 8 — Performance tuning and test coverage
 

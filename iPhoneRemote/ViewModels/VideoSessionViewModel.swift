@@ -17,6 +17,8 @@ final class VideoSessionViewModel: ObservableObject {
     /// `VideoContentGeometry`), since the video is letterboxed rather than
     /// stretched to fill the viewer.
     @Published private(set) var videoSize: CGSize?
+    @Published private(set) var availableDisplays: [DisplayDescriptor] = []
+    @Published private(set) var selectedDisplayID: UInt32?
 
     let decoder = VideoDecoder()
 
@@ -36,10 +38,35 @@ final class VideoSessionViewModel: ObservableObject {
                     self.errorMessage = "This Mac needs to be paired again before it can stream video."
                     return
                 }
+                try? await newConnection.send(.qualityPreference(QualityPreferencePayload(profile: SettingsStore.streamingQuality)))
                 await self.pump(newConnection)
             } catch {
                 self.errorMessage = "Couldn't start the video stream."
                 Logging.session.error("Video connect failed: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
+    func selectDisplay(_ id: UInt32) {
+        guard let connection else { return }
+        selectedDisplayID = id
+        isStreaming = false
+        Task {
+            do {
+                try await connection.send(.selectDisplay(SelectDisplayPayload(displayID: id)))
+            } catch {
+                Logging.session.error("Failed to switch display: \(String(describing: error), privacy: .public)")
+            }
+        }
+    }
+
+    func changeQuality(_ profile: QualityProfile) {
+        guard let connection else { return }
+        Task {
+            do {
+                try await connection.send(.qualityPreference(QualityPreferencePayload(profile: profile)))
+            } catch {
+                Logging.session.error("Failed to change quality: \(String(describing: error), privacy: .public)")
             }
         }
     }
@@ -71,6 +98,11 @@ final class VideoSessionViewModel: ObservableObject {
             case .videoError(let videoError):
                 errorMessage = videoError.reason
                 isStreaming = false
+            case .displayList(let list):
+                availableDisplays = list.displays
+                if selectedDisplayID == nil {
+                    selectedDisplayID = list.displays.first(where: { $0.isMain })?.id ?? list.displays.first?.id
+                }
             default:
                 continue
             }
