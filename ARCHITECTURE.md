@@ -30,9 +30,14 @@ control handshake succeeds:
    large file never sits in a queue ahead of a mouse click on the control
    channel (see PROTOCOL.md's "why three connections" section).
 
-Phase 1 implements only the control channel, carrying just the Hello/
-HelloAck handshake. Video and file-transfer channels are added in Phase 3
-and Phase 7 respectively, once there's something real to send over them.
+The control and video channels are both implemented now; file transfer is
+still Phase 7. Notably, video isn't a separate protocol or a separate
+authentication scheme — it's a second connection that declares
+`channelPurpose: .video` in its own Hello and runs through the identical
+pairing/session-auth flow as the control channel (see PROTOCOL.md). The
+only place that treats the two differently is `HostSessionManager`, which
+branches *after* authentication succeeds: a `.control` connection joins the
+ordinary message pump, a `.video` connection gets handed to `VideoStreamer`.
 
 ## Module layout
 
@@ -137,6 +142,62 @@ gets around to it — see the doc comment on `RemoteConnection` for why that
 iterator has to be threaded through by hand rather than re-derived from
 `transport.events` each time (`AsyncStream` doesn't support more than one
 live consumer).
+
+## Video pipeline
+
+```
+MacHost/ScreenCapture/ScreenCaptureSession   SCStream → CVPixelBuffer, per frame
+        │
+        ▼
+MacHost/VideoEncoding/H264Encoder            VTCompressionSession → AVCC H.264
+        │  (onParameterSets fires once; onEncodedFrame fires per frame)
+        ▼
+MacHost/Networking/VideoStreamer             wraps videoConfig/videoFrame in
+        │                                     secureEnvelope, sends over the
+        │                                     video connection's MessageTransport
+        ▼
+                    ── network ──
+        ▼
+iPhoneRemote/ViewModels/VideoSessionViewModel  pulls decrypted messages via
+        │                                       RemoteConnection.nextMessage()
+        ▼
+iPhoneRemote/Video/VideoDecoder              rebuilds CMSampleBuffers from the
+        │                                     raw AVCC data + SPS/PPS
+        ▼
+iPhoneRemote/Video/SampleBufferDisplayView   AVSampleBufferDisplayLayer.enqueue(_:)
+```
+
+Design choices worth calling out:
+
+- **AVCC throughout, no Annex-B.** `VTCompressionSession` natively produces
+  AVCC-framed (4-byte length-prefixed) NAL units, and `CMSampleBufferCreate`
+  on the decode side consumes the same framing directly. Converting to
+  Annex-B start-codes would be pure overhead with no benefit here, since
+  nothing in this pipeline needs it.
+- **`AVSampleBufferDisplayLayer`, not a manual `VTDecompressionSession`.**
+  The layer decodes and displays in one step; Apple recommends it for
+  exactly this case, and it removes an entire second C-callback-based
+  session (with its own lifecycle to manage) from the iPhone side.
+- **Frames are stamped with the iPhone's own "now," not the Mac's capture
+  timestamp.** `VideoDecoder` runs its own `CMTimebase` sourced from the
+  local host clock and assigns each incoming frame that clock's current
+  time as its presentation timestamp. The Mac's original capture PTS has no
+  defined relationship to the iPhone's clock, and for a live interactive
+  stream there's no "correct" playback rate to preserve — the goal is
+  "show it as soon as it arrives," not accurate timing reconstruction.
+- **Video rides the same encrypted channel as everything else.** Every
+  `videoConfig`/`videoFrame`/`videoError` is sealed with the video
+  connection's `SecureSession` before being sent, via the same
+  `secureEnvelope` mechanism Phase 2 built — no separate "is video worth
+  encrypting" decision was made; screen content is the most sensitive data
+  this app handles.
+
+**`H264Encoder` and `VideoDecoder` are the highest-risk files in the
+project.** Both do low-level Core Media/VideoToolbox buffer construction —
+C-callback bridging, raw pointer extraction, manual `CMSampleBuffer`
+assembly — that is easy to get subtly wrong and that this environment
+cannot compile-check (see README.md's status note). If video capture,
+encoding, or rendering doesn't work on first build, start there.
 
 ## Why not WebRTC
 

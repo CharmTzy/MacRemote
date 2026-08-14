@@ -41,10 +41,11 @@ actor RemoteConnection {
     private var transport: MessageTransport?
     private var iterator: AsyncStream<TransportEvent>.Iterator?
     private var pendingPairing: PendingPairing?
+    private var activeSession: SecureSession?
     private let trustedDevices = TrustedDeviceStore()
 
     @discardableResult
-    func connect(to endpoint: NWEndpoint) async throws -> ConnectResult {
+    func connect(to endpoint: NWEndpoint, purpose: ChannelPurpose = .control) async throws -> ConnectResult {
         let transport = MessageTransport.connect(to: endpoint, parameters: NWParametersFactory.controlChannel())
         self.transport = transport
         let stream = await transport.events
@@ -59,7 +60,8 @@ actor RemoteConnection {
             deviceID: DeviceIdentity.localDeviceID(),
             deviceName: DeviceIdentity.localDeviceName,
             deviceModel: DeviceIdentity.localDeviceModel,
-            deviceKind: .iPhone
+            deviceKind: .iPhone,
+            channelPurpose: purpose
         )
         try await transport.send(.hello(hello))
 
@@ -128,7 +130,9 @@ actor RemoteConnection {
         }
 
         let sessionKey = PairingCrypto.sessionKey(sharedSecret: sharedSecret, nonce: challenge.nonce)
-        return .authenticated(session: SecureSession(key: sessionKey), macDeviceID: ack.deviceID, macName: ack.deviceName, macModel: ack.deviceModel)
+        let session = SecureSession(key: sessionKey)
+        activeSession = session
+        return .authenticated(session: session, macDeviceID: ack.deviceID, macName: ack.deviceName, macModel: ack.deviceModel)
     }
 
     func submitPairingCode(_ code: String) async throws -> ConnectResult {
@@ -181,7 +185,35 @@ actor RemoteConnection {
         }
 
         pendingPairing = nil
+        activeSession = session
         return .authenticated(session: session, macDeviceID: pending.macDeviceID, macName: peerIdentity.deviceName, macModel: peerIdentity.deviceModel)
+    }
+
+    /// Pulls the next authenticated message, decrypting `secureEnvelope`
+    /// traffic with the session established by `connect(to:)` /
+    /// `submitPairingCode(_:)`. Only meaningful after one of those returned
+    /// `.authenticated`. Returns `nil` once the connection closes.
+    func nextMessage() async -> ProtocolMessage? {
+        guard var iter = iterator else { return nil }
+        defer { iterator = iter }
+
+        while let event = await iter.next() {
+            switch event {
+            case .message(let message):
+                guard case .secureEnvelope(let sealed) = message, var session = activeSession else { continue }
+                var decoded: ProtocolMessage?
+                if let plaintext = try? session.open(counter: sealed.counter, combined: sealed.combined) {
+                    decoded = try? ProtocolMessage.decodeInner(plaintext)
+                }
+                activeSession = session
+                if let decoded { return decoded }
+            case .failed, .cancelled:
+                return nil
+            case .ready:
+                continue
+            }
+        }
+        return nil
     }
 
     func close() async {
@@ -189,6 +221,7 @@ actor RemoteConnection {
         transport = nil
         iterator = nil
         pendingPairing = nil
+        activeSession = nil
     }
 
     private static func waitUntilReady(_ iterator: inout AsyncStream<TransportEvent>.Iterator) async -> Bool {

@@ -22,6 +22,11 @@ enum ProtocolMessage: Sendable {
     /// session's `SecureSession`. The plaintext inside is itself a full
     /// inner message (category + type + payload) — see `encodedInner()`.
     case secureEnvelope(SealedPayload)
+
+    // Video (Phase 3) — always travels wrapped in secureEnvelope; see PROTOCOL.md.
+    case videoConfig(VideoConfigPayload)
+    case videoFrame(VideoFramePayload)
+    case videoError(VideoErrorPayload)
 }
 
 extension ProtocolMessage {
@@ -31,6 +36,8 @@ extension ProtocolMessage {
         case .ping, .pong: return .heartbeat
         case .authBegin, .authChallenge, .sessionAuthResponse, .pairingConfirm, .identityExchange, .authResult, .secureEnvelope:
             return .authentication
+        case .videoConfig, .videoFrame, .videoError:
+            return .video
         }
     }
 
@@ -49,6 +56,9 @@ extension ProtocolMessage {
         case .identityExchange: return 5
         case .authResult: return 6
         case .secureEnvelope: return 7
+        case .videoConfig: return 1
+        case .videoFrame: return 2
+        case .videoError: return 3
         }
     }
 
@@ -66,6 +76,9 @@ extension ProtocolMessage {
         case .identityExchange(let payload): payload.encode(into: &writer)
         case .authResult(let payload): payload.encode(into: &writer)
         case .secureEnvelope(let payload): payload.encode(into: &writer)
+        case .videoConfig(let payload): payload.encode(into: &writer)
+        case .videoFrame(let payload): payload.encode(into: &writer)
+        case .videoError(let payload): payload.encode(into: &writer)
         }
         return writer.data
     }
@@ -123,7 +136,14 @@ extension ProtocolMessage {
             case 7: return .secureEnvelope(try SealedPayload.decode(from: &reader))
             default: throw DecodeError.unknownType(category: category, type: type)
             }
-        case .video, .input, .keyboard, .clipboard, .file, .system, .quality:
+        case .video:
+            switch type {
+            case 1: return .videoConfig(try VideoConfigPayload.decode(from: &reader))
+            case 2: return .videoFrame(try VideoFramePayload.decode(from: &reader))
+            case 3: return .videoError(try VideoErrorPayload.decode(from: &reader))
+            default: throw DecodeError.unknownType(category: category, type: type)
+            }
+        case .input, .keyboard, .clipboard, .file, .system, .quality:
             throw DecodeError.unknownType(category: category, type: type)
         }
     }

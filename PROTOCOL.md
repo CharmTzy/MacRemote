@@ -38,7 +38,7 @@ hands you, get back zero or more complete, decoded messages.
 |---|---|---|
 | `authentication` | 1 | Pairing handshake, session auth (implemented) |
 | `session` | 2 | Hello / HelloAck (implemented) |
-| `video` | 3 | Encoded frame data (Phase 3) |
+| `video` | 3 | Encoded frame data (implemented) |
 | `input` | 4 | Mouse/touch/trackpad events (Phase 4) |
 | `keyboard` | 5 | Key events, modifiers, text input (Phase 5) |
 | `clipboard` | 6 | Clipboard sync (Phase 7) |
@@ -63,11 +63,21 @@ authentication.
 
 ```
 UInt16   protocolVersion
-UUID     deviceID        (as string, see ByteWriter.writeUUID)
+UUID     deviceID          (as string, see ByteWriter.writeUUID)
 String   deviceName
 String   deviceModel
-UInt8    deviceKind      (1 = mac, 2 = iPhone)
+UInt8    deviceKind        (1 = mac, 2 = iPhone)
+UInt8    channelPurpose    (1 = control, 2 = video)
 ```
+
+`channelPurpose` is what makes the two-connection design (control + video,
+see ARCHITECTURE.md) work without a separate binding protocol: a device
+opens a second connection, declares `channelPurpose: .video` in its Hello,
+and runs through the *exact same* authentication as the control connection
+— reusing `sessionAuth` since by the time a video connection is opened the
+device is already paired. `HostSessionManager` branches on this field only
+after authentication succeeds, to decide whether to start `VideoStreamer`
+or hand the connection to the ordinary authenticated-traffic pump.
 
 ### `session` / HelloAck (type 2)
 
@@ -195,9 +205,42 @@ String   reason   (empty string decodes as nil)
 Every message sent after `authResult(accepted: true)`. Same shape as
 `IdentityExchange` (`counter` + `combined`), but the sealed plaintext is a
 *full inner message* — its own category + type + payload, unframed (see
-`ProtocolMessage.encodedInner()` / `decodeInner(_:)`). No feature sends
-anything through this yet; it exists so Phase 3+ has an encrypted channel
-ready to use rather than needing to invent one under time pressure.
+`ProtocolMessage.encodedInner()` / `decodeInner(_:)`). The video connection
+is what actually exercises this now: every `videoConfig`/`videoFrame`/
+`videoError` the Mac sends travels wrapped in one of these.
+
+### `video` / VideoConfig (type 1)
+
+Sent once a video connection is streaming (and again if the source display
+or its resolution changes), before any `VideoFrame`. Always wrapped in
+`secureEnvelope`.
+
+```
+UInt32   width
+UInt32   height
+Data     sps   (H.264 Sequence Parameter Set, AVCC framing)
+Data     pps   (H.264 Picture Parameter Set, AVCC framing)
+```
+
+### `video` / VideoFrame (type 2)
+
+One encoded frame. Always wrapped in `secureEnvelope`.
+
+```
+Bool     isKeyFrame
+Data     sampleData   (AVCC-framed H.264 sample, exactly as VTCompressionSession
+                        produced it — no Annex-B conversion in either direction)
+```
+
+### `video` / VideoError (type 3)
+
+Sent instead of frames when the Mac can't stream — most commonly a missing
+Screen Recording permission. Lets the iPhone show a real explanation
+instead of a black screen with no context.
+
+```
+String   reason
+```
 
 ## Design rules for future messages
 

@@ -8,7 +8,8 @@ final class ProtocolMessageTests: XCTestCase {
             deviceID: UUID(),
             deviceName: "Wai's MacBook Air",
             deviceModel: "Mac15,6",
-            deviceKind: .mac
+            deviceKind: .mac,
+            channelPurpose: .control
         )
         let message = ProtocolMessage.hello(payload)
         let frame = message.encodedFrame()
@@ -30,6 +31,23 @@ final class ProtocolMessageTests: XCTestCase {
             return XCTFail("Expected .hello")
         }
         XCTAssertEqual(decodedPayload, payload)
+    }
+
+    func testHelloRoundTripForBothChannelPurposes() throws {
+        for purpose: ChannelPurpose in [.control, .video] {
+            let payload = HelloPayload(
+                protocolVersion: ProtocolVersion.current,
+                deviceID: UUID(),
+                deviceName: "Wai's iPhone",
+                deviceModel: "iPhone16,2",
+                deviceKind: .iPhone,
+                channelPurpose: purpose
+            )
+            var writer = ByteWriter()
+            payload.encode(into: &writer)
+            var reader = ByteReader(writer.data)
+            XCTAssertEqual(try HelloPayload.decode(from: &reader), payload)
+        }
     }
 
     func testHelloAckRejectionCarriesReason() throws {

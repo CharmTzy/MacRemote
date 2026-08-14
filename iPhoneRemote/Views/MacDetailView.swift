@@ -5,6 +5,7 @@ struct MacDetailView: View {
     let mac: DiscoveredMac
     @StateObject private var session = DeviceSessionViewModel()
     @State private var showingForgetConfirmation = false
+    @State private var showingViewer = false
 
     var body: some View {
         List {
@@ -53,6 +54,16 @@ struct MacDetailView: View {
                 .disabled(session.connectionState == .connecting)
             }
 
+            if session.connectionState == .connected {
+                Section {
+                    Button {
+                        showingViewer = true
+                    } label: {
+                        Label("View Screen", systemImage: "rectangle.on.rectangle")
+                    }
+                }
+            }
+
             if session.macDeviceID != nil {
                 Section {
                     Button("Forget This Mac", role: .destructive) {
@@ -82,6 +93,9 @@ struct MacDetailView: View {
             }
         } message: {
             Text("Your iPhone will need to pair with this Mac again before it can connect.")
+        }
+        .fullScreenCover(isPresented: $showingViewer) {
+            RemoteViewerView(mac: mac)
         }
     }
 }

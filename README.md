@@ -19,17 +19,21 @@ list). What exists right now:
       session authentication for returning devices, AES-GCM encrypted
       post-auth channel, Keychain-backed trusted-device store with revoke.
       **Written but not yet run on real hardware** — see the note below.
-- [ ] Phase 3 — Live screen streaming (ScreenCaptureKit → VideoToolbox → iPhone)
+- [x] Phase 3 — Live screen streaming: ScreenCaptureKit capture → VideoToolbox
+      H.264 encode → encrypted video connection → `AVSampleBufferDisplayLayer`
+      on the iPhone. **Written but not yet run on real hardware** — see the
+      note below, and ARCHITECTURE.md's "Video pipeline" section for which
+      two files carry the most risk.
 - [ ] Phase 4 — Mouse/trackpad control
 - [ ] Phase 5 — Keyboard input and shortcuts
 - [ ] Phase 6 — Full product UX (settings, monitor picker, remote toolbar)
 - [ ] Phase 7 — Clipboard sync, file transfer, media/system commands, reconnection
 - [ ] Phase 8 — Performance tuning and test coverage
 
-**Screen sharing and remote control do not work yet.** Right now this
-repository proves the plumbing and the security layer: a Mac can be found
-on the network, and an iPhone can pair with it and open an authenticated,
-encrypted session. See the phase list above for what's next.
+**Remote control (mouse/keyboard) doesn't work yet.** A paired iPhone can
+now watch a live view of the Mac's primary display — tap "View Screen" on
+a connected Mac's detail screen — but can't yet interact with it. See the
+phase list above for what's next.
 
 **A note on verification:** this codebase was written in an environment
 without Xcode or the Swift/Apple toolchain available, so `xcodegen generate`
@@ -91,11 +95,13 @@ Remote on the iPhone, and your Mac should appear under **Nearby**.
 
 ## Permissions
 
-The Mac app needs **Screen Recording** and **Accessibility** to do its job
-once streaming and control land (Phases 3–5). It has a dedicated
-Permissions screen that shows real status and links straight to the right
-System Settings pane — nothing is requested silently, and nothing fails
-silently either.
+The Mac app needs **Screen Recording** to stream its screen (now required
+— Phase 3) and **Accessibility** to be controlled (Phase 4/5, not required
+yet). It has a dedicated Permissions screen that shows real status and
+links straight to the right System Settings pane. If Screen Recording
+isn't granted when an iPhone tries to view the screen, the Mac reports that
+back explicitly (a `videoError` message) instead of the iPhone just seeing
+a black screen with no explanation.
 
 ## Pairing and security
 

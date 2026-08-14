@@ -132,15 +132,47 @@ final class HostSessionManager: ObservableObject {
             let outcome = await authenticator.authenticate(hello: hello, transport: transport, iterator: &iterator)
 
             switch outcome {
-            case .authenticated(var session):
-                self.registerPeer(hello)
-                await self.pumpAuthenticatedTraffic(deviceID: hello.deviceID, transport: transport, iterator: &iterator, session: &session)
-                self.removePeer(id: hello.deviceID)
+            case .authenticated(let session):
+                switch hello.channelPurpose {
+                case .control:
+                    var mutableSession = session
+                    self.registerPeer(hello)
+                    await self.pumpAuthenticatedTraffic(deviceID: hello.deviceID, transport: transport, iterator: &iterator, session: &mutableSession)
+                    self.removePeer(id: hello.deviceID)
+                case .video:
+                    await self.streamVideo(deviceID: hello.deviceID, transport: transport, session: session, iterator: &iterator)
+                }
             case .rejected(let reason):
                 Logging.session.notice("Rejected \(hello.deviceName, privacy: .public): \(reason, privacy: .public)")
                 await transport.close()
             }
         }
+    }
+
+    /// Starts capturing and encoding once a video connection authenticates,
+    /// and keeps it running until the connection closes. Video is one
+    /// direction only (Mac → iPhone) — this loop's job is purely to notice
+    /// disconnection so capture can stop promptly.
+    private func streamVideo(
+        deviceID: UUID,
+        transport: MessageTransport,
+        session: SecureSession,
+        iterator: inout AsyncStream<TransportEvent>.Iterator
+    ) async {
+        let streamer = VideoStreamer(transport: transport, session: session)
+        await streamer.start()
+        Logging.session.info("Streaming video to \(deviceID.uuidString, privacy: .public)")
+
+        while let event = await iterator.next() {
+            switch event {
+            case .failed, .cancelled:
+                await streamer.stop()
+                return
+            case .ready, .message:
+                continue
+            }
+        }
+        await streamer.stop()
     }
 
     private static func awaitHello(_ iterator: inout AsyncStream<TransportEvent>.Iterator) async -> HelloPayload? {
@@ -186,8 +218,9 @@ final class HostSessionManager: ObservableObject {
         }
     }
 
-    /// Nothing decodes to a real feature yet — Phase 3+ adds video/input/
-    /// keyboard handling here.
+    /// Nothing decodes to a real feature yet on the control channel — video
+    /// has its own dedicated connection and handler (`streamVideo`); input
+    /// and keyboard (Phase 4/5) will decode here.
     private func handleAuthenticatedMessage(_ message: ProtocolMessage, from deviceID: UUID) {}
 
     private func registerPeer(_ hello: HelloPayload) {

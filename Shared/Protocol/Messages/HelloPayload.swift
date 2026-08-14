@@ -1,14 +1,16 @@
 import Foundation
 
-/// First message sent on a new control connection, before any authentication.
-/// Identifies the sender and the protocol version it speaks. Contains no
-/// secrets — pairing/authentication (Phase 2) rides on top of this handshake.
+/// First message sent on a new connection, before any authentication.
+/// Identifies the sender, the protocol version it speaks, and what the
+/// connection is for. Contains no secrets — authentication (Phase 2) rides
+/// on top of this handshake.
 struct HelloPayload: Sendable, Equatable {
     let protocolVersion: UInt16
     let deviceID: UUID
     let deviceName: String
     let deviceModel: String
     let deviceKind: DeviceKind
+    let channelPurpose: ChannelPurpose
 
     func encode(into writer: inout ByteWriter) {
         writer.writeUInt16(protocolVersion)
@@ -16,6 +18,7 @@ struct HelloPayload: Sendable, Equatable {
         writer.writeString(deviceName)
         writer.writeString(deviceModel)
         writer.writeUInt8(deviceKind.rawValue)
+        writer.writeUInt8(channelPurpose.rawValue)
     }
 
     static func decode(from reader: inout ByteReader) throws -> HelloPayload {
@@ -26,6 +29,9 @@ struct HelloPayload: Sendable, Equatable {
         guard let kind = DeviceKind(rawValue: try reader.readUInt8()) else {
             throw ByteReader.ReadError.invalidEnumRawValue
         }
-        return HelloPayload(protocolVersion: version, deviceID: id, deviceName: name, deviceModel: model, deviceKind: kind)
+        guard let purpose = ChannelPurpose(rawValue: try reader.readUInt8()) else {
+            throw ByteReader.ReadError.invalidEnumRawValue
+        }
+        return HelloPayload(protocolVersion: version, deviceID: id, deviceName: name, deviceModel: model, deviceKind: kind, channelPurpose: purpose)
     }
 }
