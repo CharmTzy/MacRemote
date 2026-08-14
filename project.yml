@@ -1,0 +1,86 @@
+name: MacRemote
+options:
+  createIntermediateGroups: true
+  deploymentTarget:
+    macOS: "14.0"
+    iOS: "17.0"
+
+settings:
+  base:
+    SWIFT_VERSION: "5.10"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    CODE_SIGN_STYLE: Automatic
+    # Personal Team apps must use a bundle ID no one else has registered.
+    # Change this prefix to something under your own name before running
+    # on a physical device. See SETUP.md.
+    DEVELOPMENT_TEAM: ""
+
+targets:
+  MacRemoteHost:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: MacHost
+        excludes:
+          - "App/Info.plist"
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.macremote.host
+        PRODUCT_NAME: "Mac Remote"
+        INFOPLIST_FILE: MacHost/App/Info.plist
+        ENABLE_HARDENED_RUNTIME: NO
+        COMBINE_HIDPI_IMAGES: YES
+        GENERATE_INFOPLIST_FILE: NO
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+
+  MacRemoteSharedTests:
+    type: bundle.unit-test
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Shared
+      - path: SharedTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.macremote.sharedtests
+        GENERATE_INFOPLIST_FILE: YES
+
+  iPhoneRemote:
+    type: application
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: iPhoneRemote
+        excludes:
+          - "App/Info.plist"
+      - path: Shared
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.macremote.mobile
+        PRODUCT_NAME: "Mac Remote"
+        INFOPLIST_FILE: iPhoneRemote/App/Info.plist
+        GENERATE_INFOPLIST_FILE: NO
+        TARGETED_DEVICE_FAMILY: "1"
+        IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+
+schemes:
+  MacRemoteHost:
+    build:
+      targets:
+        MacRemoteHost: all
+        MacRemoteSharedTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MacRemoteSharedTests
+  iPhoneRemote:
+    build:
+      targets:
+        iPhoneRemote: all
+    run:
+      config: Debug
