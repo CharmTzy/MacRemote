@@ -47,19 +47,33 @@ list). What exists right now:
       restart/shutdown behind a confirmation), and automatic reconnection
       with exponential backoff when the control connection drops
       unexpectedly.
-- [ ] Phase 8 — Performance tuning and test coverage
+- [x] Phase 8 — Automatic quality adjustment (`AdaptiveQualityController`,
+      driven by round-trip time measured over the video connection's own
+      heartbeat, unit tested), continuous-input throttling (mouse
+      move/drag capped to ~60/sec so a fast drag doesn't flood the
+      network), a code-review performance pass (see ARCHITECTURE.md's
+      "Performance notes" — real profiling needs a device this
+      environment doesn't have), and unit test coverage across every wire
+      message, the crypto primitives, coordinate mapping, and the
+      reconnect backoff schedule.
 
-**Everything from the spec's success criteria works end to end except
-adaptive (automatic) quality adjustment**, which is what's left for Phase
-8 — screen mirroring, touch/trackpad control, keyboard input, multi-display
-switching, clipboard, file transfer, system commands, and reconnection are
-all implemented.
+**Every feature in the spec's success criteria is implemented**: discovery,
+pairing, permissions, live screen mirroring, direct-touch and trackpad
+control, keyboard input and shortcuts, multi-display switching, clipboard
+sync, file transfer, system commands, automatic reconnection, and adaptive
+quality. All 8 phases are code-complete.
 
-**A note on verification:** this codebase was written in an environment
-without Xcode or the Swift/Apple toolchain available, so `xcodegen generate`
-and an actual build have not happened yet — see SETUP.md, and treat the
-first real build as the point where remaining compiler errors (if any) get
-found and fixed, not as a formality.
+**A note on verification — read this before trusting any of the above:**
+this codebase was written in an environment without Xcode or the
+Swift/Apple toolchain available, so `xcodegen generate` and an actual
+build have never happened. "Implemented" above means the code exists,
+handles the cases described, and reads correctly against Apple's
+documented APIs on manual review — not that it compiles cleanly or works
+on a device yet. Treat the first real build as the actual finish line:
+see SETUP.md, and expect to spend real time on it, starting with
+`ARCHITECTURE.md`'s "Video pipeline" section (`H264Encoder.swift` and
+`VideoDecoder.swift` are flagged as the highest-risk files in the whole
+project) if video doesn't show up on first run.
 
 ## Project structure
 
@@ -67,28 +81,37 @@ found and fixed, not as a formality.
 MacRemote/
 ├── project.yml          XcodeGen project definition (see SETUP.md)
 ├── Shared/               Code compiled into both apps
-│   ├── Models/           Connection state, discovered/paired device models
+│   ├── Models/           Connection state, device/display/quality/transfer models
 │   ├── Networking/       NWConnection wrapper, Bonjour constants
-│   ├── Protocol/         Binary wire format and message types
-│   ├── Security/         Keychain storage (identity keys land in Phase 2)
-│   └── Utilities/        Logging, device identity
+│   ├── Protocol/         Binary wire format and every message type
+│   ├── Security/         Keychain, identity keys, pairing crypto, SecureSession
+│   └── Utilities/        Logging, device identity, geometry/backoff/quality math
 ├── MacHost/              macOS app (the Mac being controlled)
 │   ├── App/               App entry point, Info.plist
-│   ├── Views/              SwiftUI screens
+│   ├── Views/              SwiftUI screens (Overview/Devices/Display/Permissions/Settings)
 │   ├── ViewModels/         Presentation logic
-│   ├── Networking/         Listener, Bonjour advertising, session handling
-│   └── Permissions/        Screen Recording / Accessibility checks
+│   ├── Networking/         Listener, session handling, video streaming
+│   ├── ScreenCapture/      ScreenCaptureKit capture session
+│   ├── VideoEncoding/      VTCompressionSession H.264 encoder
+│   ├── InputControl/       CGEvent posting (mouse/keyboard/system commands)
+│   ├── Pairing/            Pairing-code coordinator and UI
+│   ├── Clipboard/          NSPasteboard polling
+│   ├── FileTransfer/       Incoming file receiver
+│   ├── Permissions/        Screen Recording / Accessibility checks
+│   └── Settings/           UserDefaults-backed preference keys
 └── iPhoneRemote/         iOS app (the remote control)
     ├── App/                App entry point, Info.plist
-    ├── Views/              SwiftUI screens
+    ├── Views/              SwiftUI screens (Macs list, detail, remote viewer, ...)
     ├── ViewModels/         Presentation logic
-    ├── Discovery/           Bonjour browsing
-    └── Networking/          Client connection + handshake
+    ├── Video/              VTDecompressionSession-free H.264 decode + display
+    ├── Gestures/           UIKit gesture bridges (direct touch, trackpad)
+    ├── Keyboard/           System-keyboard-to-wire-message translation
+    ├── Networking/         Client connection + handshake
+    ├── Discovery/          Bonjour browsing
+    ├── Pairing/             Pairing-code entry UI
+    ├── FileTransfer/        Outgoing file sender
+    └── Settings/            Settings screen + shared preference keys
 ```
-
-Folders like `ScreenCapture/`, `VideoEncoding/`, `InputControl/`, `Pairing/`,
-`Clipboard/`, and `FileTransfer/` already exist as scaffolding and are filled
-in as each phase lands.
 
 ## System requirements
 
@@ -115,13 +138,21 @@ Remote on the iPhone, and your Mac should appear under **Nearby**.
 
 ## Permissions
 
-The Mac app needs **Screen Recording** to stream its screen (now required
-— Phase 3) and **Accessibility** to be controlled (Phase 4/5, not required
-yet). It has a dedicated Permissions screen that shows real status and
-links straight to the right System Settings pane. If Screen Recording
-isn't granted when an iPhone tries to view the screen, the Mac reports that
-back explicitly (a `videoError` message) instead of the iPhone just seeing
-a black screen with no explanation.
+The Mac app needs **Screen Recording** to stream its screen and
+**Accessibility** to accept mouse/keyboard control — both required for the
+app to be useful, neither silently skipped. It has a dedicated Permissions
+screen that shows real status and links straight to the right System
+Settings pane. If Screen Recording isn't granted when an iPhone tries to
+view the screen, the Mac reports that back explicitly (a `videoError`
+message) instead of the iPhone just seeing a black screen with no
+explanation; if Accessibility isn't granted, input events silently don't
+land (that's how `CGEvent.post` itself behaves) — the Permissions tab is
+where that becomes visible.
+
+Sleep/Restart/Shut Down/Mute/Volume (the system-command Shortcuts) need a
+third, separate permission — **Automation** — the first time one of them
+is used; see SECURITY.md for why that one doesn't have a dedicated status
+row the way the other two do.
 
 ## Pairing and security
 

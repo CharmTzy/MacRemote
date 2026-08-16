@@ -209,6 +209,8 @@ final class HostSessionManager: ObservableObject {
                     await streamer.selectDisplay(id: CGDirectDisplayID(payload.displayID))
                 case .qualityPreference(let payload):
                     await streamer.applyQuality(payload.profile)
+                case .ping(let timestamp):
+                    await streamer.pong(timestamp)
                 default:
                     break
                 }

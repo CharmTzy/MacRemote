@@ -8,6 +8,13 @@ import Combine
 /// exact same discovery/authentication machinery as the control
 /// connection, just declared with `channelPurpose: .video` — and feeds
 /// incoming frames to a `VideoDecoder`.
+///
+/// Also drives `.auto` quality: a ping every few seconds measures round
+/// trip time over this same connection, feeds it to
+/// `AdaptiveQualityController`, and applies the result the same way a
+/// manual Settings change would (`VideoStreamer.applyQuality(_:)` on the
+/// Mac doesn't know or care whether a profile change came from a person or
+/// from this).
 @MainActor
 final class VideoSessionViewModel: ObservableObject {
     @Published private(set) var isStreaming = false
@@ -24,6 +31,11 @@ final class VideoSessionViewModel: ObservableObject {
 
     private var connection: RemoteConnection?
     private var pumpTask: Task<Void, Never>?
+    private var heartbeatTask: Task<Void, Never>?
+    private var adaptiveQuality = AdaptiveQualityController()
+    private var appliedAutoProfile: QualityProfile = .balanced
+    private var pendingPingTimestamp: UInt64?
+    private var pendingPingSentAt: Date?
 
     func start(endpoint: NWEndpoint) {
         guard pumpTask == nil else { return }
@@ -39,6 +51,7 @@ final class VideoSessionViewModel: ObservableObject {
                     return
                 }
                 try? await newConnection.send(.qualityPreference(QualityPreferencePayload(profile: SettingsStore.streamingQuality)))
+                self.startHeartbeat(over: newConnection)
                 await self.pump(newConnection)
             } catch {
                 self.errorMessage = "Couldn't start the video stream."
@@ -74,10 +87,48 @@ final class VideoSessionViewModel: ObservableObject {
     func stop() {
         pumpTask?.cancel()
         pumpTask = nil
+        heartbeatTask?.cancel()
+        heartbeatTask = nil
+        pendingPingTimestamp = nil
+        pendingPingSentAt = nil
+        adaptiveQuality = AdaptiveQualityController()
         let connectionToClose = connection
         connection = nil
         isStreaming = false
         Task { await connectionToClose?.close() }
+    }
+
+    /// Pings every 3 seconds, but only when quality is `.auto` — a manual
+    /// Quality choice means the person overrode automatic behavior, so
+    /// this stays quiet rather than second-guessing them.
+    private func startHeartbeat(over connection: RemoteConnection) {
+        guard heartbeatTask == nil else { return }
+        heartbeatTask = Task {
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(3))
+                guard !Task.isCancelled else { return }
+                guard SettingsStore.streamingQuality == .auto else { continue }
+
+                if self.pendingPingTimestamp != nil {
+                    let profile = self.adaptiveQuality.recordTimeout()
+                    self.applyAdaptiveProfileIfNeeded(profile, connection: connection)
+                }
+
+                let now = UInt64(Date().timeIntervalSince1970 * 1000)
+                self.pendingPingTimestamp = now
+                self.pendingPingSentAt = Date()
+                try? await connection.send(.ping(now))
+            }
+        }
+    }
+
+    private func applyAdaptiveProfileIfNeeded(_ profile: QualityProfile, connection: RemoteConnection) {
+        guard profile != appliedAutoProfile else { return }
+        appliedAutoProfile = profile
+        Logging.session.info("Auto quality switched to \(profile.label, privacy: .public)")
+        Task {
+            try? await connection.send(.qualityPreference(QualityPreferencePayload(profile: profile)))
+        }
     }
 
     private func pump(_ connection: RemoteConnection) async {
@@ -103,6 +154,13 @@ final class VideoSessionViewModel: ObservableObject {
                 if selectedDisplayID == nil {
                     selectedDisplayID = list.displays.first(where: { $0.isMain })?.id ?? list.displays.first?.id
                 }
+            case .pong(let timestamp):
+                guard pendingPingTimestamp == timestamp, let sentAt = pendingPingSentAt else { continue }
+                pendingPingTimestamp = nil
+                pendingPingSentAt = nil
+                guard SettingsStore.streamingQuality == .auto else { continue }
+                let profile = adaptiveQuality.recordRoundTrip(Date().timeIntervalSince(sentAt))
+                applyAdaptiveProfileIfNeeded(profile, connection: connection)
             default:
                 continue
             }

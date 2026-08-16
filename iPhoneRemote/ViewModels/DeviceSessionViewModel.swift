@@ -25,6 +25,15 @@ final class DeviceSessionViewModel: ObservableObject {
     private var connectTask: Task<Void, Never>?
     private var pumpTask: Task<Void, Never>?
     private var reconnectTask: Task<Void, Never>?
+    private var lastMoveSentAt: Date?
+    private static let moveThrottleInterval: TimeInterval = 1.0 / 60.0
+
+    private static func isContinuousMotion(_ message: ProtocolMessage) -> Bool {
+        switch message {
+        case .mouseMove, .mouseDragged: return true
+        default: return false
+        }
+    }
     private var lastEndpoint: NWEndpoint?
     private var lastDisplayName: String?
 
@@ -78,8 +87,22 @@ final class DeviceSessionViewModel: ObservableObject {
     /// high-frequency and the UI has nothing useful to do with a
     /// per-message failure beyond noting it in the log. Requires an active,
     /// authenticated connection; silently does nothing otherwise.
+    ///
+    /// Continuous-motion messages (a finger dragging generates far more
+    /// gesture callbacks than the network or the Mac's cursor needs) are
+    /// throttled to ~60/sec; clicks, key presses, and everything else
+    /// always send immediately and are never dropped.
     func sendInput(_ message: ProtocolMessage) {
         guard connectionState == .connected, let connection else { return }
+
+        if Self.isContinuousMotion(message) {
+            let now = Date()
+            if let lastMoveSentAt, now.timeIntervalSince(lastMoveSentAt) < Self.moveThrottleInterval {
+                return
+            }
+            lastMoveSentAt = now
+        }
+
         Task {
             do {
                 try await connection.send(message)

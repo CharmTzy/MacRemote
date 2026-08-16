@@ -103,8 +103,14 @@ once authentication actually runs.
 UInt64   timestamp   (milliseconds since epoch, sender's clock)
 ```
 
-Implemented and round-trip tested, not yet driven by a periodic timer —
-that lands with Phase 7's connection-loss detection and reconnect logic.
+Driven from the iPhone side of the **video** connection, every 3 seconds,
+but only while streaming quality is `.auto` (`VideoSessionViewModel.
+startHeartbeat`) — its purpose is round-trip-time measurement for Phase
+8's automatic quality adjustment (`AdaptiveQualityController`), not
+connection-loss detection. Detecting a *dropped* connection (Phase 7) is
+handled separately, by the pump loop's `nextMessage()` simply returning
+`nil` when a connection closes — no heartbeat needed for that, since
+`NWConnection` already surfaces closure/failure as a state change.
 
 ## Authentication sequence
 

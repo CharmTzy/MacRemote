@@ -217,6 +217,53 @@ tradeoff is that adaptive bitrate/quality (Phase 8) and reconnection
 (Phase 7) are hand-rolled instead of inherited from a mature library; the
 architecture notes above are written with that cost in mind.
 
+## Performance notes
+
+No profiler has touched this code — there's no device to run Instruments
+on from this environment (see README.md's status note). What follows is a
+code-review pass, not measurement: real bottlenecks should be found with
+Instruments (Time Profiler for CPU, Allocations for the video pipeline)
+once this runs on real hardware, not guessed at further from here.
+
+**Fixed during this pass:**
+- **Input was unthrottled.** A finger dragging across the screen generates
+  far more `UIPanGestureRecognizer` callbacks than either the network or
+  the Mac's cursor benefit from — every callback was becoming a
+  `mouseMove`/`mouseDragged` send. `DeviceSessionViewModel.sendInput`
+  now caps continuous-motion messages (move/dragged only — clicks, keys,
+  and everything else are never throttled) to ~60/sec by dropping
+  intermediate updates within a 16ms window. The final position in a drag
+  always sends, since the button-up event isn't throttled.
+
+**Deliberate choices already made with performance in mind**, kept here so
+a future pass doesn't re-litigate them without the context:
+- AVCC framing end to end with no Annex-B conversion (see "Video
+  pipeline" above) — one less transform per frame, in both directions.
+- The video and control channels are separate connections specifically so
+  large payloads (video frames, file chunks) never queue ahead of a mouse
+  click on the wire.
+- `AVSampleBufferDisplayLayer` instead of a hand-rolled Metal render path
+  — hardware-accelerated decode and display in one step, maintained by
+  Apple rather than by this codebase.
+
+**Known, not yet addressed** — real candidates for a future pass, once
+there's a device to measure on:
+- `H264Encoder`'s `onEncodedFrame` and `ScreenCaptureSession`'s `onFrame`
+  each spawn a new `Task` per callback (30-60/sec at typical frame rates).
+  Swift's task scheduling is cheap but not free; a persistent actor
+  mailbox would avoid the per-frame allocation if profiling shows it
+  matters.
+- `VideoDecoder.makeSampleBuffer` allocates a fresh `CMBlockBuffer` per
+  frame rather than reusing a pool. Apple's own AVFoundation samples do
+  the same for exactly this use case, so this is more "matches the
+  reference pattern" than "known-fine," but a buffer pool is the obvious
+  next step if allocation churn shows up in Instruments.
+- No memory-pressure or thermal-state handling — a sustained high-quality
+  stream on an older iPhone could get warm. `AdaptiveQualityController`
+  reacts to network conditions (round-trip time) but not to on-device
+  thermal state; `ProcessInfo.thermalState` would be the integration
+  point if this becomes a real problem.
+
 ## Phase plan
 
 See the checklist in `README.md` for current status. The phase boundaries

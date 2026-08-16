@@ -71,11 +71,17 @@ actor VideoStreamer {
     }
 
     /// Decrypts an incoming message on this same connection (the iPhone's
-    /// only uses for this so far are `selectDisplay` and
-    /// `qualityPreference`).
+    /// uses for this so far are `selectDisplay`, `qualityPreference`, and
+    /// `ping` for round-trip-time measurement — see `pong(_:)`).
     func decodeIncoming(_ sealed: SealedPayload) -> ProtocolMessage? {
         guard let plaintext = try? session.open(counter: sealed.counter, combined: sealed.combined) else { return nil }
         return try? ProtocolMessage.decodeInner(plaintext)
+    }
+
+    /// Replies to a `ping` immediately — the iPhone uses the round trip
+    /// time to drive `.auto` quality (Phase 8's `AdaptiveQualityController`).
+    func pong(_ timestamp: UInt64) async {
+        await sendSealed(.pong(timestamp))
     }
 
     func stop() async {

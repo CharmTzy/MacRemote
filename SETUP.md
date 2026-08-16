@@ -87,10 +87,16 @@ otherwise) removes it.
 
 ## 8. Grant Mac permissions
 
-Once Phases 3–5 land, the Mac app will need **Screen Recording** and
-**Accessibility** access. Its **Permissions** tab shows live status for
-both and a button that opens the exact System Settings pane — grant them
-there when the app asks.
+The Mac app needs **Screen Recording** (to stream its screen) and
+**Accessibility** (to accept mouse/keyboard input) access. Its
+**Permissions** tab shows live status for both and a button that opens the
+exact System Settings pane — grant them there when the app asks.
+
+The first time you use a Shortcut like Sleep, Restart, or Volume from the
+iPhone, macOS will separately prompt for **Automation** access (System
+Settings → Privacy & Security → Automation) — that one has no status row
+in the Permissions tab since Apple doesn't provide a way to check it in
+advance; see SECURITY.md.
 
 ## 9. Connect
 
