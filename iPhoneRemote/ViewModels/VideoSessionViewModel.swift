@@ -21,8 +21,7 @@ final class VideoSessionViewModel: ObservableObject {
     @Published private(set) var errorMessage: String?
     /// The Mac's display size, from the most recent `VideoConfig` — needed
     /// to map a touch point to a normalized position (see
-    /// `VideoContentGeometry`), since the video is letterboxed rather than
-    /// stretched to fill the viewer.
+    /// `VideoContentGeometry`) while preserving the full display aspect ratio.
     @Published private(set) var videoSize: CGSize?
     @Published private(set) var availableDisplays: [DisplayDescriptor] = []
     @Published private(set) var selectedDisplayID: UInt32?

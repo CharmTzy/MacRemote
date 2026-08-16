@@ -17,6 +17,7 @@ final class DeviceSessionViewModel: ObservableObject {
     @Published private(set) var pairingCodeNeeded = false
     @Published private(set) var pairingErrorMessage: String?
     @Published private(set) var isSubmittingCode = false
+    @Published private(set) var runningApplications: [RunningApplicationDescriptor] = []
 
     private(set) var activeSession: SecureSession?
     private(set) var macDeviceID: UUID?
@@ -124,6 +125,14 @@ final class DeviceSessionViewModel: ObservableObject {
         sendInput(.clipboardUpdate(ClipboardPayload(text: text)))
     }
 
+    func requestRunningApplications() {
+        sendInput(.runningApplicationsRequest)
+    }
+
+    func activateApplication(_ application: RunningApplicationDescriptor) {
+        sendInput(.activateApplication(ActivateApplicationPayload(bundleIdentifier: application.bundleIdentifier)))
+    }
+
     /// Tears the connection down and returns to `.available`. Safe to call
     /// from any state, including mid-reconnect — this is also how the user
     /// cancels an in-progress automatic reconnection attempt.
@@ -143,6 +152,7 @@ final class DeviceSessionViewModel: ObservableObject {
         pairingCodeNeeded = false
         pairingErrorMessage = nil
         isSubmittingCode = false
+        runningApplications = []
     }
 
     private func handle(result: RemoteConnection.ConnectResult, displayName: String?) {
@@ -169,8 +179,14 @@ final class DeviceSessionViewModel: ObservableObject {
         guard let connection, pumpTask == nil else { return }
         pumpTask = Task {
             while !Task.isCancelled, let message = await connection.nextMessage() {
-                guard case .clipboardUpdate(let payload) = message, SettingsStore.clipboardSyncEnabled else { continue }
-                UIPasteboard.general.string = payload.text
+                switch message {
+                case .clipboardUpdate(let payload) where SettingsStore.clipboardSyncEnabled:
+                    UIPasteboard.general.string = payload.text
+                case .runningApplications(let payload):
+                    runningApplications = payload.applications
+                default:
+                    continue
+                }
             }
             guard !Task.isCancelled else { return }
             self.pumpTask = nil

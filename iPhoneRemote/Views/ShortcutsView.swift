@@ -21,7 +21,7 @@ struct ShortcutsView: View {
                                 trigger(command)
                             } label: {
                                 Label(command.label, systemImage: command.systemImage)
-                                    .foregroundStyle(command == .shutdown || command == .restart ? .red : .primary)
+                                    .foregroundStyle(command == .shutdown || command == .restart ? Color.red : Color.primary)
                             }
                         }
                     }

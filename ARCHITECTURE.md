@@ -112,7 +112,7 @@ Mac launches
 iPhone launches, opens Macs list
   → DiscoveryViewModel.start()
   → BonjourBrowser browses _macremote._tcp
-  → results become [DiscoveredMac], shown under "Nearby"
+  → results become [DiscoveredMac], shown under "My Macs"
 
 User taps a Mac
   → DeviceSessionViewModel.connect(to:)

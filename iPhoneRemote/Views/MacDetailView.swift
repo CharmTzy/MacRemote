@@ -9,30 +9,71 @@ struct MacDetailView: View {
     @State private var showingForgetConfirmation = false
     @State private var showingViewer = false
     @State private var showingFileImporter = false
+    @State private var isSendingWakeSignal = false
+    @State private var wakeStatusMessage: String?
 
     var body: some View {
         List {
             Section {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(mac.name)
-                        .font(.title2)
-                    if let model = mac.model {
-                        Text(model)
-                            .foregroundStyle(.secondary)
+                HStack(spacing: 15) {
+                    Image(systemName: "macbook")
+                        .font(.system(size: 29, weight: .medium))
+                        .foregroundStyle(.white)
+                        .frame(width: 62, height: 62)
+                        .background(BrandTheme.accentGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(mac.name)
+                            .font(.title3.weight(.bold))
+                            .foregroundStyle(.white)
+                        Text(mac.model ?? "Mac")
+                            .font(.subheadline)
+                            .foregroundStyle(.white.opacity(0.55))
+                        Label(statusLabel, systemImage: mac.state == .offline ? "moon.zzz.fill" : "checkmark.circle.fill")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(mac.state == .offline ? Color.orange : BrandTheme.cyan)
                     }
-                    Text("Local Network")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
                 }
-                .padding(.vertical, 4)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(17)
+                .brandCard()
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
             }
 
             Section {
-                LabeledContent("Status", value: session.connectionState.label)
+                LabeledContent("Status", value: statusLabel)
                 if let error = session.lastErrorMessage {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.red)
+                }
+            }
+
+            if mac.state == .offline {
+                Section {
+                    Button(action: wakeMac) {
+                        HStack {
+                            Label("Wake Mac", systemImage: "power")
+                            Spacer()
+                            if isSendingWakeSignal { ProgressView() }
+                        }
+                    }
+                    .disabled(isSendingWakeSignal || mac.wakeMACAddress == nil)
+
+                    if let wakeStatusMessage {
+                        Text(wakeStatusMessage)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    } else if mac.wakeMACAddress == nil {
+                        Text("Connect once while the Mac is awake to save its wake information.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                } header: {
+                    Text("Remote Wake")
+                } footer: {
+                    Text("Works when the Mac is sleeping, connected to power, and Wake for network access is enabled. A fully shut-down MacBook cannot receive a network wake signal.")
                 }
             }
 
@@ -59,11 +100,16 @@ struct MacDetailView: View {
                             Spacer()
                         }
                     case .connected:
-                        Text("Disconnect")
+                        Label("Disconnect", systemImage: "xmark.circle")
                     default:
-                        Text("Connect")
+                        Label("Connect to Mac", systemImage: "bolt.fill")
                     }
                 }
+                .font(.headline)
+                .foregroundStyle(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 8)
+                .background(BrandTheme.accentGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
                 .disabled(session.connectionState == .connecting)
             }
 
@@ -72,8 +118,12 @@ struct MacDetailView: View {
                     Button {
                         showingViewer = true
                     } label: {
-                        Label("View Screen", systemImage: "rectangle.on.rectangle")
+                        Label("Start Remote Control", systemImage: "rectangle.on.rectangle")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
                     }
+                    .buttonStyle(.borderedProminent)
+                    .tint(BrandTheme.blue)
                     Button {
                         showingFileImporter = true
                     } label: {
@@ -113,6 +163,9 @@ struct MacDetailView: View {
                 }
             }
         }
+        .scrollContentBackground(.hidden)
+        .background(BrandTheme.backgroundGradient.ignoresSafeArea())
+        .environment(\.colorScheme, .dark)
         .navigationTitle(mac.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: Binding(
@@ -142,6 +195,39 @@ struct MacDetailView: View {
             if case .success(let url) = result {
                 fileTransfer.send(fileURL: url, to: mac.endpoint)
             }
+        }
+        .onChange(of: session.connectionState) { _, newValue in
+            guard newValue == .connected, let deviceID = session.macDeviceID else { return }
+            TrustedDeviceStore().updateNetworkMetadata(
+                deviceID: deviceID,
+                ipv4Address: mac.ipv4Address,
+                broadcastAddress: mac.broadcastAddress,
+                wakeMACAddress: mac.wakeMACAddress
+            )
+        }
+    }
+
+    private var statusLabel: String {
+        if mac.state == .offline, session.connectionState == .available {
+            return "Offline"
+        }
+        return session.connectionState.label
+    }
+
+    private func wakeMac() {
+        guard let macAddress = mac.wakeMACAddress else { return }
+        isSendingWakeSignal = true
+        wakeStatusMessage = nil
+        Task {
+            do {
+                try await WakeOnLANService.wake(macAddress: macAddress, broadcastAddress: mac.broadcastAddress)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                wakeStatusMessage = "Wake signal sent. The Mac usually becomes available within 10–30 seconds."
+            } catch {
+                UINotificationFeedbackGenerator().notificationOccurred(.error)
+                wakeStatusMessage = (error as? LocalizedError)?.errorDescription ?? "The wake signal couldn't be sent."
+            }
+            isSendingWakeSignal = false
         }
     }
 }

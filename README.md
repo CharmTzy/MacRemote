@@ -1,5 +1,9 @@
 # Mac Remote
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-5b8cff.svg)](LICENSE)
+[![Swift](https://img.shields.io/badge/Swift-5.10-f05138.svg)](https://www.swift.org)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%2014%2B%20%7C%20iOS%2017%2B-16c7d9.svg)](#system-requirements)
+
 Control your Mac from your iPhone over your local network. No cloud, no
 accounts, no App Store — a Mac host app and an iPhone client app that find
 each other over Bonjour and talk directly, peer to peer, on your LAN.
@@ -18,12 +22,9 @@ list). What exists right now:
 - [x] Phase 2 — Pairing (numeric code), Ed25519 device identity, signature-based
       session authentication for returning devices, AES-GCM encrypted
       post-auth channel, Keychain-backed trusted-device store with revoke.
-      **Written but not yet run on real hardware** — see the note below.
 - [x] Phase 3 — Live screen streaming: ScreenCaptureKit capture → VideoToolbox
       H.264 encode → encrypted video connection → `AVSampleBufferDisplayLayer`
-      on the iPhone. **Written but not yet run on real hardware** — see the
-      note below, and ARCHITECTURE.md's "Video pipeline" section for which
-      two files carry the most risk.
+      on the iPhone, verified on physical Mac and iPhone hardware.
 - [x] Phase 4 — Direct-touch mouse control on the video view: tap (click),
       double tap, long-press (right click), drag, two-finger scroll, all
       mapped through normalized coordinates and posted as `CGEvent`s.
@@ -56,6 +57,10 @@ list). What exists right now:
       environment doesn't have), and unit test coverage across every wire
       message, the crypto primitives, coordinate mapping, and the
       reconnect backoff schedule.
+- [x] iPhone control refinements — full-display Fit rendering without crop,
+      accurate direct-touch and relative trackpad control, a live launcher for
+      running Mac apps in Fit mode's unused margins, and Wake-on-LAN for a
+      remembered Mac that is sleeping on the local network.
 
 **Every feature in the spec's success criteria is implemented**: discovery,
 pairing, permissions, live screen mirroring, direct-touch and trackpad
@@ -63,17 +68,9 @@ control, keyboard input and shortcuts, multi-display switching, clipboard
 sync, file transfer, system commands, automatic reconnection, and adaptive
 quality. All 8 phases are code-complete.
 
-**A note on verification — read this before trusting any of the above:**
-this codebase was written in an environment without Xcode or the
-Swift/Apple toolchain available, so `xcodegen generate` and an actual
-build have never happened. "Implemented" above means the code exists,
-handles the cases described, and reads correctly against Apple's
-documented APIs on manual review — not that it compiles cleanly or works
-on a device yet. Treat the first real build as the actual finish line:
-see SETUP.md, and expect to spend real time on it, starting with
-`ARCHITECTURE.md`'s "Video pipeline" section (`H264Encoder.swift` and
-`VideoDecoder.swift` are flagged as the highest-risk files in the whole
-project) if video doesn't show up on first run.
+The Mac and iPhone targets have been built with Xcode and exercised on real
+hardware. The shared protocol, crypto, input geometry, reconnect policy, and
+compatibility code are covered by the macOS unit-test target.
 
 ## Project structure
 
@@ -134,7 +131,11 @@ open MacRemote.xcodeproj
 
 Then in Xcode: select your Personal Team for both targets, run
 `MacRemoteHost` on your Mac, run `iPhoneRemote` on your iPhone, open Mac
-Remote on the iPhone, and your Mac should appear under **Nearby**.
+Remote on the iPhone, and your Mac should appear under **My Macs**.
+
+The checked-in bundle identifiers are intentionally generic. Before running
+on physical hardware, replace the `com.example.MacRemote.*` values in
+`project.yml` with identifiers unique to your Apple Developer account.
 
 ## Permissions
 
@@ -153,6 +154,18 @@ Sleep/Restart/Shut Down/Mute/Volume (the system-command Shortcuts) need a
 third, separate permission — **Automation** — the first time one of them
 is used; see SECURITY.md for why that one doesn't have a dedicated status
 row the way the other two do.
+
+## Remote wake
+
+After the iPhone has seen the updated Mac host once while it is awake, it
+remembers the Mac's local wake address. If the Mac later appears offline,
+the detail screen offers **Wake Mac** and sends a Wake-on-LAN packet.
+
+For a MacBook, remote wake is intended for **Sleep**, with the Mac connected
+to power and **System Settings → Battery → Options → Wake for network access**
+enabled. It cannot turn on a fully shut-down MacBook because its network
+hardware is no longer listening. It also cannot wake the Mac from a different
+Wi-Fi network or cellular connection without extra router or VPN setup.
 
 ## Pairing and security
 
@@ -175,14 +188,24 @@ development. You can always fall back to **Add by IP Address** using the
 address shown on the Mac's Overview screen.
 
 **Xcode says my bundle identifier is already in use.** Free Personal Team
-accounts need a globally unique bundle ID. Change `com.macremote.host` /
-`com.macremote.mobile` in `project.yml` to something under your own name
+accounts need a globally unique bundle ID. Change `com.example.MacRemote.host` /
+`com.example.MacRemote.mobile` in `project.yml` to something under your own name
 (e.g. `com.yourname.macremote.host`), then re-run `xcodegen generate`.
 
 **The app on my iPhone stops working after a week.** Free Personal Team
 provisioning profiles expire after 7 days. Re-run the app from Xcode with
 your iPhone connected to renew it — this is an Apple limitation of free
 accounts, not a bug here.
+
+## Contributing
+
+Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md)
+before proposing a change, and keep security-sensitive reports out of public
+issues as described in [SECURITY.md](SECURITY.md).
+
+## License
+
+Mac Remote is available under the [MIT License](LICENSE).
 
 ## Documentation
 

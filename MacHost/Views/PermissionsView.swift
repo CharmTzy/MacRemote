@@ -44,7 +44,7 @@ struct PermissionsView: View {
                 Spacer()
                 Label(granted ? "Allowed" : "Required", systemImage: granted ? "checkmark.circle.fill" : "exclamationmark.triangle.fill")
                     .labelStyle(.titleAndIcon)
-                    .foregroundStyle(granted ? .secondary : .orange)
+                    .foregroundStyle(granted ? Color.secondary : Color.orange)
             }
             if !granted {
                 Button("Open System Settings") {

@@ -16,6 +16,12 @@ enum MouseController {
         post(CGEvent(mouseEventSource: eventSource, mouseType: .mouseMoved, mouseCursorPosition: pixelLocation(for: point), mouseButton: .left))
     }
 
+    static func move(byX deltaX: Float, deltaY: Float) {
+        guard let current = CGEvent(source: nil)?.location else { return }
+        let destination = CGPoint(x: current.x + CGFloat(deltaX), y: current.y + CGFloat(deltaY))
+        post(CGEvent(mouseEventSource: eventSource, mouseType: .mouseMoved, mouseCursorPosition: destination, mouseButton: .left))
+    }
+
     static func buttonDown(at point: NormalizedPoint, button: MouseButton) {
         let type: CGEventType = button == .left ? .leftMouseDown : .rightMouseDown
         post(CGEvent(mouseEventSource: eventSource, mouseType: type, mouseCursorPosition: pixelLocation(for: point), mouseButton: button.cgMouseButton))
@@ -35,7 +41,15 @@ enum MouseController {
     /// count set so the system recognizes a fast double click as a double
     /// click rather than two singles.
     static func click(at point: NormalizedPoint, button: MouseButton, count: UInt8) {
-        let location = pixelLocation(for: point)
+        click(atPixelLocation: pixelLocation(for: point), button: button, count: count)
+    }
+
+    static func clickAtCurrentPosition(button: MouseButton, count: UInt8) {
+        guard let location = CGEvent(source: nil)?.location else { return }
+        click(atPixelLocation: location, button: button, count: count)
+    }
+
+    private static func click(atPixelLocation location: CGPoint, button: MouseButton, count: UInt8) {
         let downType: CGEventType = button == .left ? .leftMouseDown : .rightMouseDown
         let upType: CGEventType = button == .left ? .leftMouseUp : .rightMouseUp
         let clampedCount = Int64(max(1, count))

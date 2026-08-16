@@ -59,6 +59,12 @@ struct ByteWriter {
         data.append(value)
     }
 
+    /// Appends bytes without a length prefix. Used only when an enclosing
+    /// protocol layer already supplies framing.
+    mutating func writeRawData(_ value: Data) {
+        data.append(value)
+    }
+
     mutating func writeUUID(_ value: UUID) {
         writeString(value.uuidString)
     }
