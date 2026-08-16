@@ -65,4 +65,34 @@ final class ProtocolMessageTests: XCTestCase {
         let decoded = try HelloAckPayload.decode(from: &reader)
         XCTAssertEqual(decoded, payload)
     }
+
+    func testRunningApplicationsRoundTrip() throws {
+        let payload = RunningApplicationsPayload(applications: [
+            RunningApplicationDescriptor(
+                bundleIdentifier: "com.apple.Safari",
+                name: "Safari",
+                iconPNGData: Data([1, 2, 3]),
+                isActive: true
+            )
+        ])
+        let frame = ProtocolMessage.runningApplications(payload).encodedFrame()
+        var parser = FrameParser()
+        let messages = try parser.feed(frame)
+        guard case .runningApplications(let decoded)? = messages.first else {
+            return XCTFail("Expected running applications")
+        }
+        XCTAssertEqual(decoded, payload)
+    }
+
+    func testActivateApplicationRoundTrip() throws {
+        let frame = ProtocolMessage.activateApplication(
+            ActivateApplicationPayload(bundleIdentifier: "com.apple.finder")
+        ).encodedFrame()
+        var parser = FrameParser()
+        let messages = try parser.feed(frame)
+        guard case .activateApplication(let decoded)? = messages.first else {
+            return XCTFail("Expected activate application")
+        }
+        XCTAssertEqual(decoded.bundleIdentifier, "com.apple.finder")
+    }
 }

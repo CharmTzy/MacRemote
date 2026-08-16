@@ -63,13 +63,33 @@ final class InputPayloadTests: XCTestCase {
         XCTAssertEqual(decoded.deltaY, payload.deltaY, accuracy: 0.01)
     }
 
+    func testRelativeMouseMoveRoundTrip() throws {
+        let payload = MouseMoveRelativePayload(deltaX: -14.5, deltaY: 8.25)
+        var writer = ByteWriter()
+        payload.encode(into: &writer)
+        var reader = ByteReader(writer.data)
+        let decoded = try MouseMoveRelativePayload.decode(from: &reader)
+        XCTAssertEqual(decoded, payload)
+    }
+
+    func testCurrentMouseClickRoundTrip() throws {
+        let payload = MouseClickCurrentPayload(button: .right, clickCount: 2)
+        var writer = ByteWriter()
+        payload.encode(into: &writer)
+        var reader = ByteReader(writer.data)
+        let decoded = try MouseClickCurrentPayload.decode(from: &reader)
+        XCTAssertEqual(decoded, payload)
+    }
+
     func testMouseMessagesRouteToInputCategory() {
         let messages: [ProtocolMessage] = [
             .mouseMove(MouseMovePayload(position: NormalizedPoint(x: 0, y: 0))),
             .mouseButton(MouseButtonPayload(position: NormalizedPoint(x: 0, y: 0), button: .left, isDown: true)),
             .mouseClick(MouseClickPayload(position: NormalizedPoint(x: 0, y: 0), button: .left, clickCount: 1)),
             .mouseDragged(MouseDraggedPayload(position: NormalizedPoint(x: 0, y: 0), button: .left)),
-            .scroll(ScrollPayload(deltaX: 0, deltaY: 0))
+            .scroll(ScrollPayload(deltaX: 0, deltaY: 0)),
+            .mouseMoveRelative(MouseMoveRelativePayload(deltaX: 0, deltaY: 0)),
+            .mouseClickCurrent(MouseClickCurrentPayload(button: .left, clickCount: 1))
         ]
         for message in messages {
             XCTAssertEqual(message.category, .input)

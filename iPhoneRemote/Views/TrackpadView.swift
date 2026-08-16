@@ -2,11 +2,9 @@ import SwiftUI
 import UIKit
 
 /// Relative-movement trackpad, as an alternative to touching the mirrored
-/// screen directly. Tracks its own "virtual cursor" position locally
-/// (starting at center) rather than reading the Mac's real cursor
-/// position back — there's no protocol message for that yet, so if the
-/// physical Mac trackpad moves the cursor at the same time, this can drift
-/// out of sync until the next direct-touch tap resets a known position.
+/// screen directly. Deltas are applied to the Mac's actual current cursor
+/// position, so switching between this surface and the physical trackpad
+/// does not cause jumps or drift.
 ///
 /// Scope note: this mode moves the cursor and clicks, but doesn't drag —
 /// distinguishing "move" from "click-and-drag" from touch alone needs a
@@ -16,15 +14,9 @@ struct TrackpadView: View {
     @ObservedObject var controlSession: DeviceSessionViewModel
     @Environment(\.dismiss) private var dismiss
 
-    @State private var virtualCursor = NormalizedPoint(x: 0.5, y: 0.5)
     @State private var hasInteracted = false
     @AppStorage(SettingsStore.Key.trackpadSensitivity) private var sensitivity: Double = 1.0
     @AppStorage(SettingsStore.Key.naturalScrolling) private var naturalScrolling = true
-
-    /// Scales a view-point pan translation into a fraction of the Mac's
-    /// screen. Not tied to any real display's resolution — it's a
-    /// deliberately arbitrary reference that `sensitivity` scales.
-    private let referenceSize = CGSize(width: 1600, height: 1000)
 
     var body: some View {
         NavigationStack {
@@ -72,31 +64,30 @@ struct TrackpadView: View {
 
     private func handleTap(count: Int) {
         markInteracted()
-        controlSession.sendInput(.mouseClick(MouseClickPayload(position: virtualCursor, button: .left, clickCount: UInt8(count))))
+        controlSession.sendInput(.mouseClickCurrent(MouseClickCurrentPayload(button: .left, clickCount: UInt8(count))))
     }
 
     private func handleRightClick() {
         markInteracted()
-        controlSession.sendInput(.mouseClick(MouseClickPayload(position: virtualCursor, button: .right, clickCount: 1)))
+        controlSession.sendInput(.mouseClickCurrent(MouseClickCurrentPayload(button: .right, clickCount: 1)))
     }
 
     private func sendClick(button: MouseButton) {
         markInteracted()
-        controlSession.sendInput(.mouseClick(MouseClickPayload(position: virtualCursor, button: button, clickCount: 1)))
+        controlSession.sendInput(.mouseClickCurrent(MouseClickCurrentPayload(button: button, clickCount: 1)))
     }
 
     private func handlePan(_ translation: CGPoint, state: UIGestureRecognizer.State) {
         guard state == .began || state == .changed else { return }
         markInteracted()
 
-        let scale = 1.5 * sensitivity
-        let deltaX = (translation.x * scale) / referenceSize.width
-        let deltaY = (translation.y * scale) / referenceSize.height
-        virtualCursor = NormalizedPoint(
-            x: min(1, max(0, virtualCursor.x + deltaX)),
-            y: min(1, max(0, virtualCursor.y + deltaY))
-        )
-        controlSession.sendInput(.mouseMove(MouseMovePayload(position: virtualCursor)))
+        let speed = hypot(translation.x, translation.y)
+        let acceleration = min(2.0, 1.0 + speed / 12.0)
+        let scale = 1.8 * sensitivity * acceleration
+        controlSession.sendInput(.mouseMoveRelative(MouseMoveRelativePayload(
+            deltaX: Float(translation.x * scale),
+            deltaY: Float(translation.y * scale)
+        )))
     }
 
     private func handleScroll(_ delta: CGPoint) {

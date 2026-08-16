@@ -23,5 +23,9 @@ enum ServiceConstants {
         static let deviceName = "name"
         static let modelIdentifier = "model"
         static let protocolVersion = "ver"
+        static let deviceID = "id"
+        static let ipv4Address = "ip"
+        static let broadcastAddress = "broadcast"
+        static let wakeMACAddress = "wake"
     }
 }

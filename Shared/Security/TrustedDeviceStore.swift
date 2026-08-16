@@ -31,6 +31,26 @@ struct TrustedDeviceStore {
         try keychain.set(data, account: record.id.uuidString)
     }
 
+    func updateNetworkMetadata(
+        deviceID: UUID,
+        ipv4Address: String?,
+        broadcastAddress: String?,
+        wakeMACAddress: String?
+    ) {
+        guard let existing = record(for: deviceID) else { return }
+        let updated = PairedDeviceRecord(
+            id: existing.id,
+            name: existing.name,
+            model: existing.model,
+            publicKey: existing.publicKey,
+            pairedAt: existing.pairedAt,
+            lastKnownIPv4Address: ipv4Address ?? existing.lastKnownIPv4Address,
+            lastKnownBroadcastAddress: broadcastAddress ?? existing.lastKnownBroadcastAddress,
+            wakeMACAddress: wakeMACAddress ?? existing.wakeMACAddress
+        )
+        try? save(updated)
+    }
+
     func remove(deviceID: UUID) throws {
         try keychain.delete(account: deviceID.uuidString)
     }

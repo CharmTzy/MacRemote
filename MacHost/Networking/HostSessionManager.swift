@@ -3,6 +3,7 @@ import Network
 import CoreGraphics
 import OSLog
 import Combine
+import AppKit
 
 /// Owns the Mac's listening socket: advertises this Mac over Bonjour,
 /// accepts incoming control connections, and runs each one through the
@@ -20,16 +21,18 @@ final class HostSessionManager: ObservableObject {
     let pairingCoordinator: PairingCoordinator
     private let trustedDevices = TrustedDeviceStore()
     private let clipboardMonitor = ClipboardMonitor()
-    private var clipboardChannels: [UUID: SecureChannel] = [:]
+    private var controlChannels: [UUID: SecureChannel] = [:]
+    private var workspaceObserverTokens: [NSObjectProtocol] = []
 
     private var listener: NWListener?
     private static let listenerQueue = DispatchQueue(label: "com.macremote.host.listener")
 
-    init(pairingCoordinator: PairingCoordinator = PairingCoordinator()) {
-        self.pairingCoordinator = pairingCoordinator
+    init(pairingCoordinator: PairingCoordinator? = nil) {
+        self.pairingCoordinator = pairingCoordinator ?? PairingCoordinator()
         clipboardMonitor.onTextChanged = { [weak self] text in
             self?.broadcastClipboard(text)
         }
+        observeRunningApplications()
     }
 
     func start() {
@@ -39,9 +42,15 @@ final class HostSessionManager: ObservableObject {
             let newListener = try NWListener(using: NWParametersFactory.controlChannel(), on: ServiceConstants.defaultPort)
 
             var txt = NWTXTRecord()
-            txt[ServiceConstants.TXTKey.deviceName] = .string(DeviceIdentity.localDeviceName)
-            txt[ServiceConstants.TXTKey.modelIdentifier] = .string(DeviceIdentity.localDeviceModel)
-            txt[ServiceConstants.TXTKey.protocolVersion] = .string(String(ProtocolVersion.current))
+            txt[ServiceConstants.TXTKey.deviceName] = DeviceIdentity.localDeviceName
+            txt[ServiceConstants.TXTKey.modelIdentifier] = DeviceIdentity.localDeviceModel
+            txt[ServiceConstants.TXTKey.protocolVersion] = String(ProtocolVersion.current)
+            txt[ServiceConstants.TXTKey.deviceID] = DeviceIdentity.localDeviceID().uuidString
+            if let network = LocalNetworkInfo.primaryInterface() {
+                txt[ServiceConstants.TXTKey.ipv4Address] = network.ipv4Address
+                txt[ServiceConstants.TXTKey.broadcastAddress] = network.broadcastAddress
+                txt[ServiceConstants.TXTKey.wakeMACAddress] = network.macAddress
+            }
 
             newListener.service = NWListener.Service(
                 name: DeviceIdentity.localDeviceName,
@@ -71,13 +80,39 @@ final class HostSessionManager: ObservableObject {
         isAdvertising = false
         connectedPeers.removeAll()
         clipboardMonitor.stop()
-        clipboardChannels.removeAll()
+        controlChannels.removeAll()
     }
 
     private func broadcastClipboard(_ text: String) {
         guard SettingsStore.clipboardSyncEnabled else { return }
-        for channel in clipboardChannels.values {
+        for channel in controlChannels.values {
             Task { try? await channel.send(.clipboardUpdate(ClipboardPayload(text: text))) }
+        }
+    }
+
+    private func observeRunningApplications() {
+        let center = NSWorkspace.shared.notificationCenter
+        for name in [
+            NSWorkspace.didLaunchApplicationNotification,
+            NSWorkspace.didTerminateApplicationNotification,
+            NSWorkspace.didActivateApplicationNotification
+        ] {
+            workspaceObserverTokens.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
+                Task { @MainActor in self?.broadcastRunningApplications() }
+            })
+        }
+    }
+
+    private func sendRunningApplications(to deviceID: UUID) {
+        guard let channel = controlChannels[deviceID] else { return }
+        let payload = RunningApplicationsController.snapshot()
+        Task { try? await channel.send(.runningApplications(payload)) }
+    }
+
+    private func broadcastRunningApplications() {
+        let payload = RunningApplicationsController.snapshot()
+        for channel in controlChannels.values {
+            Task { try? await channel.send(.runningApplications(payload)) }
         }
     }
 
@@ -154,10 +189,11 @@ final class HostSessionManager: ObservableObject {
                 case .control:
                     var mutableSession = session
                     self.registerPeer(hello)
-                    self.clipboardChannels[hello.deviceID] = SecureChannel(transport: transport, session: session)
+                    self.controlChannels[hello.deviceID] = SecureChannel(transport: transport, session: session)
+                    self.sendRunningApplications(to: hello.deviceID)
                     await self.pumpAuthenticatedTraffic(deviceID: hello.deviceID, transport: transport, iterator: &iterator, session: &mutableSession)
                     self.removePeer(id: hello.deviceID)
-                    self.clipboardChannels.removeValue(forKey: hello.deviceID)
+                    self.controlChannels.removeValue(forKey: hello.deviceID)
                 case .video:
                     await self.streamVideo(deviceID: hello.deviceID, transport: transport, session: session, iterator: &iterator)
                 case .file:
@@ -273,6 +309,8 @@ final class HostSessionManager: ObservableObject {
         switch message {
         case .mouseMove(let payload):
             MouseController.move(to: payload.position)
+        case .mouseMoveRelative(let payload):
+            MouseController.move(byX: payload.deltaX, deltaY: payload.deltaY)
         case .mouseButton(let payload):
             if payload.isDown {
                 MouseController.buttonDown(at: payload.position, button: payload.button)
@@ -283,6 +321,8 @@ final class HostSessionManager: ObservableObject {
             MouseController.dragged(to: payload.position, button: payload.button)
         case .mouseClick(let payload):
             MouseController.click(at: payload.position, button: payload.button, count: payload.clickCount)
+        case .mouseClickCurrent(let payload):
+            MouseController.clickAtCurrentPosition(button: payload.button, count: payload.clickCount)
         case .scroll(let payload):
             MouseController.scroll(deltaX: payload.deltaX, deltaY: payload.deltaY)
         case .textInput(let payload):
@@ -294,6 +334,17 @@ final class HostSessionManager: ObservableObject {
             clipboardMonitor.applyRemoteText(payload.text)
         case .systemCommand(let payload):
             SystemCommandController.perform(payload.command)
+        case .runningApplicationsRequest:
+            sendRunningApplications(to: deviceID)
+        case .activateApplication(let payload):
+            RunningApplicationsController.activate(bundleIdentifier: payload.bundleIdentifier) { [weak self] activated in
+                if activated {
+                    Logging.input.notice("Activated running application \(payload.bundleIdentifier, privacy: .public)")
+                } else {
+                    Logging.input.warning("Rejected application activation for \(payload.bundleIdentifier, privacy: .public)")
+                }
+                self?.broadcastRunningApplications()
+            }
         default:
             break
         }

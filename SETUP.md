@@ -36,8 +36,8 @@ open MacRemote.xcodeproj
 
 Apple requires bundle identifiers to be globally unique, even for apps you
 never submit to the App Store. `project.yml` ships with placeholders
-(`com.macremote.host`, `com.macremote.mobile`) that will likely collide with
-someone else's registration under a free account.
+(`com.example.MacRemote.host`, `com.example.MacRemote.mobile`) that must be
+replaced before physical-device installation.
 
 Open `project.yml`, change the prefix to something under your own name:
 
@@ -101,7 +101,7 @@ advance; see SECURITY.md.
 ## 9. Connect
 
 With both apps running and both devices on the same Wi-Fi network, open Mac
-Remote on your iPhone. Your Mac should appear under **Nearby** within a
+Remote on your iPhone. Your Mac should appear under **My Macs** within a
 couple of seconds. Tap it, then tap **Connect**.
 
 If it doesn't appear, see the Troubleshooting section in `README.md` —
@@ -109,6 +109,17 @@ most commonly it's a Wi-Fi network that blocks Bonjour's multicast traffic
 (common on corporate/guest networks). **Add by IP Address** on the Macs
 list screen is the fallback; the Mac's address and port are on its
 Overview screen.
+
+## 10. Enable wake from sleep (optional)
+
+On a MacBook, connect the charger and enable **System Settings → Battery →
+Options → Wake for network access**. Open the updated Mac host and iPhone app
+together at least once so the iPhone can remember the Mac's wake address.
+When that remembered Mac is sleeping and shown as offline, open its detail
+screen and tap **Wake Mac**.
+
+Wake-on-LAN does not power on a fully shut-down MacBook, and it only works
+while the iPhone can reach the Mac's local network.
 
 ## Regenerating after pulling changes
 

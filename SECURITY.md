@@ -1,15 +1,16 @@
 # Security
 
-## Current state: implemented, not yet verified on real hardware
+## Reporting a vulnerability
 
-Phase 2 implements everything this document describes below — pairing,
-identity, session authentication, and encrypted post-auth traffic are all
-real code, not a plan. What it hasn't had yet is a build-and-run on an
-actual Mac and iPhone (this repository was authored in an environment
-without the Apple toolchain available — see SETUP.md). Treat the
-cryptographic design as reviewed and the implementation as unverified until
-that first real run happens; report anything that doesn't match this
-document's description as a bug.
+Please do not open a public issue for a suspected security vulnerability.
+Use GitHub's **Security → Report a vulnerability** flow so pairing, screen,
+input, or cryptographic problems can be discussed privately before details
+are disclosed.
+
+The implementation has been built and exercised on physical Mac and iPhone
+hardware, with automated coverage for protocol framing, authentication
+payloads, encryption counters, coordinate mapping, and compatibility. This
+is not a claim of a formal third-party security audit.
 
 Phase 1's Hello/HelloAck handshake is still the very first thing that
 happens on a new connection, and it remains unauthenticated by design — it
@@ -138,6 +139,21 @@ action, and both apps' Settings screens (Phase 6) offer "Forget All" too.
 This is the honest fallback for "I don't trust that this device is still
 under my control" — there is no remote-wipe or revocation-list mechanism
 because there is no server to host one.
+
+## Remote wake and application launcher
+
+Wake-on-LAN is intentionally not an authenticated control channel. It is a
+standard local broadcast containing the Mac network interface's hardware
+address; another device on the same LAN may also be able to wake the Mac.
+Waking only brings macOS to its normal lock/login screen—it does not grant a
+remote session. Screen, input, and application activation still require the
+paired, encrypted control channel.
+
+The Fit-mode launcher only enumerates regular applications that are already
+running. Activation requests identify an app by bundle identifier, and the
+Mac host rejects anything that is not currently present in
+`NSWorkspace.runningApplications`. It does not accept executable paths,
+launch new programs, or run arbitrary commands.
 
 ## Clipboard sync's asymmetric design
 

@@ -11,10 +11,8 @@ settings:
     MARKETING_VERSION: "0.1.0"
     CURRENT_PROJECT_VERSION: "1"
     CODE_SIGN_STYLE: Automatic
-    # Personal Team apps must use a bundle ID no one else has registered.
-    # Change this prefix to something under your own name before running
-    # on a physical device. See SETUP.md.
-    DEVELOPMENT_TEAM: ""
+    # Public-source placeholders. Choose your own Team and unique bundle IDs
+    # before installing on physical devices; see SETUP.md.
 
 targets:
   MacRemoteHost:
@@ -28,8 +26,9 @@ targets:
       - path: Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.macremote.host
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.MacRemote.host
         PRODUCT_NAME: "Mac Remote"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_FILE: MacHost/App/Info.plist
         ENABLE_HARDENED_RUNTIME: NO
         COMBINE_HIDPI_IMAGES: YES
@@ -45,7 +44,7 @@ targets:
       - path: SharedTests
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.macremote.sharedtests
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.MacRemote.sharedtests
         GENERATE_INFOPLIST_FILE: YES
 
   iPhoneRemote:
@@ -59,12 +58,27 @@ targets:
       - path: Shared
     settings:
       base:
-        PRODUCT_BUNDLE_IDENTIFIER: com.macremote.mobile
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.MacRemote.mobile
         PRODUCT_NAME: "Mac Remote"
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         INFOPLIST_FILE: iPhoneRemote/App/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         TARGETED_DEVICE_FAMILY: "1"
         IPHONEOS_DEPLOYMENT_TARGET: "17.0"
+
+  iPhoneRemoteUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "17.0"
+    sources:
+      - path: iPhoneRemoteUITests
+    dependencies:
+      - target: iPhoneRemote
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.MacRemote.uitests
+        TEST_TARGET_NAME: iPhoneRemote
+        GENERATE_INFOPLIST_FILE: YES
 
 schemes:
   MacRemoteHost:
@@ -84,3 +98,7 @@ schemes:
         iPhoneRemote: all
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - iPhoneRemoteUITests

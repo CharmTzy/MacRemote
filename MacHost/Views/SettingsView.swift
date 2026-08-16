@@ -14,11 +14,13 @@ struct SettingsView: View {
                 Text("When on, copying text on either device makes it available to paste on the other.")
             }
 
-            Section("Security") {
+            Section {
                 Button("Forget All Paired Devices", role: .destructive) {
                     showingForgetAllConfirmation = true
                 }
                 .disabled(sessionManager.pairedDevices().isEmpty)
+            } header: {
+                Text("Security")
             } footer: {
                 Text("Every paired iPhone will need to pair again, with a new code, before it can connect. Manage individual devices from the Devices tab.")
             }

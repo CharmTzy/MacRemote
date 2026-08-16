@@ -37,6 +37,8 @@ enum ProtocolMessage: Sendable {
     case mouseClick(MouseClickPayload)
     case mouseDragged(MouseDraggedPayload)
     case scroll(ScrollPayload)
+    case mouseMoveRelative(MouseMoveRelativePayload)
+    case mouseClickCurrent(MouseClickCurrentPayload)
 
     // Keyboard (Phase 5) — always travels wrapped in secureEnvelope, over
     // the control connection.
@@ -57,6 +59,9 @@ enum ProtocolMessage: Sendable {
 
     // System commands (Phase 7) — control connection.
     case systemCommand(SystemCommandPayload)
+    case runningApplicationsRequest
+    case runningApplications(RunningApplicationsPayload)
+    case activateApplication(ActivateApplicationPayload)
 }
 
 extension ProtocolMessage {
@@ -68,7 +73,7 @@ extension ProtocolMessage {
             return .authentication
         case .videoConfig, .videoFrame, .videoError, .displayList, .selectDisplay:
             return .video
-        case .mouseMove, .mouseButton, .mouseClick, .mouseDragged, .scroll:
+        case .mouseMove, .mouseButton, .mouseClick, .mouseDragged, .scroll, .mouseMoveRelative, .mouseClickCurrent:
             return .input
         case .textInput, .specialKey:
             return .keyboard
@@ -78,7 +83,7 @@ extension ProtocolMessage {
             return .clipboard
         case .fileOffer, .fileChunk, .fileComplete:
             return .file
-        case .systemCommand:
+        case .systemCommand, .runningApplicationsRequest, .runningApplications, .activateApplication:
             return .system
         }
     }
@@ -108,6 +113,8 @@ extension ProtocolMessage {
         case .mouseClick: return 3
         case .mouseDragged: return 4
         case .scroll: return 5
+        case .mouseMoveRelative: return 6
+        case .mouseClickCurrent: return 7
         case .textInput: return 1
         case .specialKey: return 2
         case .qualityPreference: return 1
@@ -116,6 +123,9 @@ extension ProtocolMessage {
         case .fileChunk: return 2
         case .fileComplete: return 3
         case .systemCommand: return 1
+        case .runningApplicationsRequest: return 2
+        case .runningApplications: return 3
+        case .activateApplication: return 4
         }
     }
 
@@ -143,6 +153,8 @@ extension ProtocolMessage {
         case .mouseClick(let payload): payload.encode(into: &writer)
         case .mouseDragged(let payload): payload.encode(into: &writer)
         case .scroll(let payload): payload.encode(into: &writer)
+        case .mouseMoveRelative(let payload): payload.encode(into: &writer)
+        case .mouseClickCurrent(let payload): payload.encode(into: &writer)
         case .textInput(let payload): payload.encode(into: &writer)
         case .specialKey(let payload): payload.encode(into: &writer)
         case .qualityPreference(let payload): payload.encode(into: &writer)
@@ -151,6 +163,9 @@ extension ProtocolMessage {
         case .fileChunk(let payload): payload.encode(into: &writer)
         case .fileComplete(let payload): payload.encode(into: &writer)
         case .systemCommand(let payload): payload.encode(into: &writer)
+        case .runningApplicationsRequest: break
+        case .runningApplications(let payload): payload.encode(into: &writer)
+        case .activateApplication(let payload): payload.encode(into: &writer)
         }
         return writer.data
     }
@@ -162,7 +177,7 @@ extension ProtocolMessage {
         var writer = ByteWriter()
         writer.writeUInt8(category.rawValue)
         writer.writeUInt8(typeCode)
-        writer.data.append(encodePayload())
+        writer.writeRawData(encodePayload())
         return writer.data
     }
 
@@ -173,7 +188,7 @@ extension ProtocolMessage {
         let inner = encodedInner()
         var writer = ByteWriter()
         writer.writeUInt32(UInt32(inner.count))
-        writer.data.append(inner)
+        writer.writeRawData(inner)
         return writer.data
     }
 
@@ -224,6 +239,8 @@ extension ProtocolMessage {
             case 3: return .mouseClick(try MouseClickPayload.decode(from: &reader))
             case 4: return .mouseDragged(try MouseDraggedPayload.decode(from: &reader))
             case 5: return .scroll(try ScrollPayload.decode(from: &reader))
+            case 6: return .mouseMoveRelative(try MouseMoveRelativePayload.decode(from: &reader))
+            case 7: return .mouseClickCurrent(try MouseClickCurrentPayload.decode(from: &reader))
             default: throw DecodeError.unknownType(category: category, type: type)
             }
         case .keyboard:
@@ -252,6 +269,9 @@ extension ProtocolMessage {
         case .system:
             switch type {
             case 1: return .systemCommand(try SystemCommandPayload.decode(from: &reader))
+            case 2: return .runningApplicationsRequest
+            case 3: return .runningApplications(try RunningApplicationsPayload.decode(from: &reader))
+            case 4: return .activateApplication(try ActivateApplicationPayload.decode(from: &reader))
             default: throw DecodeError.unknownType(category: category, type: type)
             }
         }

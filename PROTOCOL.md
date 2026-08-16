@@ -248,7 +248,7 @@ instead of a black screen with no context.
 String   reason
 ```
 
-### `input` / MouseMove, MouseButton, MouseClick, MouseDragged, Scroll (types 1-5)
+### `input` / MouseMove, MouseButton, MouseClick, MouseDragged, Scroll, MouseMoveRelative, MouseClickCurrent (types 1-7)
 
 All wrapped in `secureEnvelope`, sent over the **control** connection (never
 video). `NormalizedPoint` (`Shared/Models/NormalizedPoint.swift`) is two
@@ -261,12 +261,17 @@ MouseButton   NormalizedPoint position, UInt8 button, Bool isDown
 MouseClick    NormalizedPoint position, UInt8 button, UInt8 clickCount
 MouseDragged  NormalizedPoint position, UInt8 button
 Scroll        Float deltaX, Float deltaY
+MouseMoveRelative Float deltaX, Float deltaY
+MouseClickCurrent UInt8 button, UInt8 clickCount
 ```
 
 `button`: 1 = left, 2 = right. `MouseClick` is the common case (a plain tap
 or a long-press-as-right-click) sent as one atomic message; `MouseButton`
 + `MouseDragged` + `MouseButton` bracket an actual drag, matching the
 down/dragged/up shape `CGEvent` itself expects on the Mac side.
+`MouseMoveRelative` and `MouseClickCurrent` power Trackpad mode using the
+Mac's real current pointer position, avoiding a drift-prone virtual cursor
+on the iPhone.
 
 ### `keyboard` / TextInput (type 1)
 
@@ -367,6 +372,21 @@ One of 15 fixed actions (Mission Control, Launchpad, Spotlight, App
 Switcher, Show Desktop, Lock, Sleep, Mute, Volume Up/Down, Play/Pause,
 Previous/Next Track, Restart, Shut Down). `restart` and `shutdown` require
 the iPhone to confirm before sending — see `SystemCommand.requiresConfirmation`.
+
+### `system` / RunningApplicationsRequest, RunningApplications, ActivateApplication (types 2-4)
+
+Authenticated quick-access messages used by the iPhone viewer's app dock.
+The Mac only exposes regular foreground applications that are already
+running; activation is by bundle identifier and never launches an arbitrary
+path or command.
+
+```
+RunningApplicationsRequest   (empty)
+RunningApplications          UInt16 count, then count × {
+                               String bundleIdentifier, String name, Data iconPNG
+                             }
+ActivateApplication          String bundleIdentifier
+```
 
 ## Design rules for future messages
 

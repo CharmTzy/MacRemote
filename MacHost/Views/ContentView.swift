@@ -27,6 +27,19 @@ struct ContentView: View {
     var body: some View {
         NavigationSplitView {
             List(selection: $selection) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Image(systemName: "rectangle.connected.to.line.below")
+                        .font(.title2)
+                        .foregroundStyle(BrandTheme.blue)
+                    Text("MAC REMOTE")
+                        .font(.caption.weight(.bold))
+                        .tracking(1)
+                    Text("Private local control")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 10)
+
                 ForEach(SidebarSection.allCases) { section in
                     Label(section.rawValue, systemImage: section.systemImage)
                         .tag(section)
@@ -48,6 +61,7 @@ struct ContentView: View {
                 SettingsView().environmentObject(sessionManager)
             }
         }
+        .tint(BrandTheme.blue)
         .onAppear { sessionManager.start() }
     }
 }

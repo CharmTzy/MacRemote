@@ -22,21 +22,64 @@ struct RemoteViewerView: View {
 
     var body: some View {
         GeometryReader { proxy in
+            let contentGeometry = geometry(for: proxy.size)
+            let hasSidePanel = usesSidePanel(for: proxy.size)
+            let controlPanelWidth = sidePanelWidth(for: proxy.size)
+
             ZStack {
                 Color.black.ignoresSafeArea()
 
-                SampleBufferDisplayView(decoder: videoSession.decoder)
-                    .ignoresSafeArea()
-                    .opacity(videoSession.isStreaming ? 1 : 0)
+                if let contentGeometry {
+                    SampleBufferDisplayView(decoder: videoSession.decoder)
+                        .frame(
+                            width: contentGeometry.contentRect.width,
+                            height: contentGeometry.contentRect.height
+                        )
+                        .position(
+                            x: contentGeometry.contentRect.midX,
+                            y: contentGeometry.contentRect.midY
+                        )
+                        .opacity(videoSession.isStreaming ? 1 : 0)
+                }
 
-                if videoSession.isStreaming {
+                if videoSession.isStreaming,
+                   let contentGeometry = geometry(for: proxy.size) {
                     TouchInputOverlay(
-                        onTap: { location, count in handleTap(location, count: count, viewSize: proxy.size) },
-                        onLongPress: { location in handleLongPress(location, viewSize: proxy.size) },
-                        onDragChange: { location, state in handleDrag(location, state: state, viewSize: proxy.size) },
+                        onTap: { location, count in
+                            handleTap(
+                                viewerLocation(location, in: contentGeometry.contentRect),
+                                count: count,
+                                viewSize: proxy.size
+                            )
+                        },
+                        onLongPress: { location in
+                            handleLongPress(
+                                viewerLocation(location, in: contentGeometry.contentRect),
+                                viewSize: proxy.size
+                            )
+                        },
+                        onDragChange: { location, state in
+                            handleDrag(
+                                viewerLocation(location, in: contentGeometry.contentRect),
+                                state: state,
+                                viewSize: proxy.size
+                            )
+                        },
                         onScroll: { delta in handleScroll(delta) }
                     )
-                    .ignoresSafeArea()
+                    // Keep the UIKit gesture surface on the video itself.
+                    // If it covers the black Fit margins, UIKit can reclaim
+                    // hit testing after a dock update and block later taps.
+                    .frame(
+                        width: contentGeometry.contentRect.width,
+                        height: contentGeometry.contentRect.height
+                    )
+                    .position(
+                        x: contentGeometry.contentRect.midX,
+                        y: contentGeometry.contentRect.midY
+                    )
+                    .clipped()
+                    .zIndex(1)
                 } else {
                     VStack(spacing: 12) {
                         if let error = videoSession.errorMessage {
@@ -58,6 +101,21 @@ struct RemoteViewerView: View {
 
                 KeyboardInputView(session: keyboardSession, isPresented: $showingKeyboard)
 
+                if videoSession.isStreaming, hasSidePanel {
+                    RemoteSidePanel(
+                        applications: controlSession.runningApplications,
+                        controlSession: controlSession,
+                        safeAreaInsets: proxy.safeAreaInsets,
+                        onActivate: controlSession.activateApplication
+                    )
+                    .frame(width: controlPanelWidth, height: proxy.size.height)
+                    .position(
+                        x: proxy.size.width - controlPanelWidth / 2,
+                        y: proxy.size.height / 2
+                    )
+                    .zIndex(2)
+                }
+
                 VStack {
                     if controlSession.connectionState == .reconnecting {
                         reconnectingBanner
@@ -65,17 +123,25 @@ struct RemoteViewerView: View {
                     }
                     Spacer()
                     if videoSession.isStreaming {
-                        remoteToolbar
-                            .padding(.bottom, 12)
+                        remoteToolbar(showsTrackpadButton: !hasSidePanel)
+                            .padding(.bottom, max(12, proxy.safeAreaInsets.bottom + 4))
                     }
                 }
+                .frame(width: contentGeometry?.contentRect.width ?? proxy.size.width)
+                .position(
+                    x: contentGeometry?.contentRect.midX ?? proxy.size.width / 2,
+                    y: proxy.size.height / 2
+                )
+                .zIndex(3)
             }
         }
+        .ignoresSafeArea()
         .toolbar(.hidden, for: .navigationBar)
         .statusBarHidden()
         .onAppear {
             videoSession.start(endpoint: mac.endpoint)
             keyboardSession.send = { message in controlSession.sendInput(message) }
+            controlSession.requestRunningApplications()
         }
         .onDisappear { videoSession.stop() }
         .sheet(isPresented: $showingTrackpad) {
@@ -109,7 +175,7 @@ struct RemoteViewerView: View {
         .environment(\.colorScheme, .dark)
     }
 
-    private var remoteToolbar: some View {
+    private func remoteToolbar(showsTrackpadButton: Bool) -> some View {
         HStack(spacing: 28) {
             Button {
                 showingKeyboard.toggle()
@@ -117,10 +183,12 @@ struct RemoteViewerView: View {
                 Image(systemName: "keyboard")
             }
 
-            Button {
-                showingTrackpad = true
-            } label: {
-                Image(systemName: "rectangle.and.hand.point.up.left")
+            if showsTrackpadButton {
+                Button {
+                    showingTrackpad = true
+                } label: {
+                    Image(systemName: "rectangle.and.hand.point.up.left")
+                }
             }
 
             Menu {
@@ -165,7 +233,39 @@ struct RemoteViewerView: View {
 
     private func geometry(for viewSize: CGSize) -> VideoContentGeometry? {
         guard let videoSize = videoSession.videoSize else { return nil }
-        return VideoContentGeometry(contentSize: videoSize, viewSize: viewSize)
+        if usesSidePanel(for: viewSize) {
+            let videoArea = CGSize(
+                width: viewSize.width - sidePanelWidth(for: viewSize),
+                height: viewSize.height
+            )
+            return VideoContentGeometry(
+                contentSize: videoSize,
+                viewSize: videoArea,
+                scalingMode: .aspectFit,
+                horizontalAlignment: .leading
+            )
+        }
+        return VideoContentGeometry(
+            contentSize: videoSize,
+            viewSize: viewSize,
+            scalingMode: .aspectFit
+        )
+    }
+
+    private func usesSidePanel(for viewSize: CGSize) -> Bool {
+        viewSize.width > viewSize.height * 1.3
+    }
+
+    private func sidePanelWidth(for viewSize: CGSize) -> CGFloat {
+        guard usesSidePanel(for: viewSize) else { return 0 }
+        return min(290, max(220, viewSize.width * 0.26))
+    }
+
+    private func viewerLocation(_ localLocation: CGPoint, in contentRect: CGRect) -> CGPoint {
+        CGPoint(
+            x: localLocation.x + contentRect.minX,
+            y: localLocation.y + contentRect.minY
+        )
     }
 
     private func handleTap(_ location: CGPoint, count: Int, viewSize: CGSize) {
