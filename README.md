@@ -3,6 +3,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-5b8cff.svg)](LICENSE)
 [![Swift](https://img.shields.io/badge/Swift-5.10-f05138.svg)](https://www.swift.org)
 [![Platforms](https://img.shields.io/badge/platforms-macOS%2014%2B%20%7C%20iOS%2017%2B-16c7d9.svg)](#system-requirements)
+[![Website](https://img.shields.io/badge/website-mac--remote.vercel.app-20c7d9.svg)](https://mac-remote.vercel.app)
 
 Control your Mac from your iPhone over your local network. No cloud, no
 accounts, no App Store — a Mac host app and an iPhone client app that find
@@ -11,6 +12,36 @@ each other over Bonjour and talk directly, peer to peer, on your LAN.
 This is a personal-use project, built from scratch on Apple's native
 frameworks (SwiftUI, Network.framework, ScreenCaptureKit, VideoToolbox,
 CryptoKit) rather than on top of WebRTC or a hosted signaling service.
+
+**[Open the Mac Remote website](https://mac-remote.vercel.app)** for the visual
+setup guide, controls, downloads, troubleshooting, and documentation.
+
+## Demo
+
+<p align="center">
+  <img src="docs/images/remote-control.png" alt="Mac Remote landscape controller with full Mac display, quick app launcher, and trackpad" width="100%" />
+</p>
+
+The landscape controller keeps the complete Mac display on the left, puts
+running-app shortcuts at the upper right, and reserves the lower-right corner
+for precise relative trackpad control.
+
+<p align="center">
+  <img src="docs/images/mac-detail.png" alt="Mac Remote connection screen on iPhone" width="100%" />
+</p>
+
+The connection screen discovers nearby Macs over Bonjour and offers a secure
+pairing flow before remote control begins.
+
+## Downloads
+
+- [Download the macOS host ZIP](https://github.com/CharmTzy/MacRemote/releases/latest/download/Mac-Remote-macOS.zip)
+- [Download the unsigned iPhone developer IPA](https://github.com/CharmTzy/MacRemote/releases/latest/download/Mac-Remote-iPhone.ipa)
+- [Download the complete source](https://github.com/CharmTzy/MacRemote/archive/refs/heads/main.zip)
+
+The iPhone package must be signed with your own Apple Developer team before
+installation. The recommended path is still to open the project in Xcode and
+run the iPhone target from there.
 
 ## Status
 

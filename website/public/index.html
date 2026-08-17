@@ -1,0 +1,247 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="theme-color" content="#080b14" />
+    <meta name="description" content="Set up Mac Remote and control your Mac securely from your iPhone over your local network." />
+    <meta property="og:title" content="Mac Remote — Your Mac, from your iPhone" />
+    <meta property="og:description" content="An open-source, peer-to-peer remote control for macOS and iPhone." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://mac-remote.vercel.app" />
+    <meta property="og:image" content="https://mac-remote.vercel.app/assets/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Mac Remote" />
+    <meta name="twitter:description" content="Private, local remote control for your Mac." />
+    <meta name="twitter:image" content="https://mac-remote.vercel.app/assets/og.png" />
+    <title>Mac Remote — Control your Mac from iPhone</title>
+    <link rel="canonical" href="https://mac-remote.vercel.app" />
+    <link rel="icon" href="/assets/app-icon.png" />
+    <link rel="apple-touch-icon" href="/assets/app-icon.png" />
+    <link rel="stylesheet" href="/styles.css" />
+    <script src="/script.js" defer></script>
+  </head>
+  <body>
+    <a class="skip-link" href="#main">Skip to content</a>
+
+    <header class="site-header" data-header>
+      <a class="brand" href="#top" aria-label="Mac Remote home">
+        <img src="/assets/app-icon.png" alt="" width="42" height="42" />
+        <span>Mac Remote</span>
+      </a>
+      <button class="menu-button" type="button" aria-label="Open navigation" aria-expanded="false" data-menu-button>
+        <span></span><span></span>
+      </button>
+      <nav class="site-nav" aria-label="Main navigation" data-menu>
+        <a href="#features">Features</a>
+        <a href="#setup">Setup</a>
+        <a href="#controls">Controls</a>
+        <a href="#docs">Documentation</a>
+        <a class="nav-download" href="#download">Download</a>
+      </nav>
+    </header>
+
+    <main id="main">
+      <section class="hero" id="top">
+        <div class="hero-glow" aria-hidden="true"></div>
+        <div class="hero-copy reveal">
+          <div class="eyebrow"><span></span> Open source · Local network · No account</div>
+          <h1>Your Mac.<br /><em>In your hands.</em></h1>
+          <p class="hero-lede">See the whole display, move the pointer, type, launch apps, send files, and wake a sleeping Mac—all from your iPhone.</p>
+          <div class="hero-actions">
+            <a class="button primary" href="#download">Download Mac Remote <span aria-hidden="true">↓</span></a>
+            <a class="button secondary" href="#setup">Read the setup guide</a>
+          </div>
+          <div class="hero-proof" aria-label="Project highlights">
+            <span><b>Peer to peer</b> on your Wi-Fi</span>
+            <span><b>Encrypted</b> after pairing</span>
+            <span><b>MIT</b> licensed</span>
+          </div>
+        </div>
+
+        <div class="hero-demo reveal" aria-label="Mac Remote running on iPhone">
+          <div class="phone-shell landscape">
+            <div class="phone-camera"></div>
+            <img src="/assets/demo-remote-control.png" alt="Mac Remote on an iPhone showing a full Mac display with quick-launch apps and a trackpad" />
+          </div>
+          <div class="live-chip"><i></i> Live on local Wi-Fi</div>
+        </div>
+      </section>
+
+      <section class="trust-strip" aria-label="Technology">
+        <p>Built natively with</p>
+        <div>
+          <span>SwiftUI</span><span>ScreenCaptureKit</span><span>VideoToolbox</span><span>CryptoKit</span><span>Bonjour</span>
+        </div>
+      </section>
+
+      <section class="section" id="features">
+        <div class="section-heading reveal">
+          <div class="eyebrow"><span></span> Everything within reach</div>
+          <h2>Remote control that feels made for iPhone.</h2>
+          <p>The Mac display stays complete on the left. The tools you reach for most stay close to your thumb on the right.</p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature-card feature-wide reveal">
+            <div>
+              <span class="feature-number">01</span>
+              <h3>Full display, zero crop</h3>
+              <p>Fit mode preserves every pixel of your Mac screen. Switch displays without reconnecting.</p>
+            </div>
+            <div class="mini-screen"><div class="mini-sidebar"></div><div class="mini-window"><i></i><i></i><i></i></div></div>
+          </article>
+          <article class="feature-card reveal">
+            <span class="feature-icon">↗</span>
+            <h3>Direct touch + trackpad</h3>
+            <p>Tap exactly where you mean, or use a precision relative trackpad with click, right-click, drag, and scroll.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="feature-icon">⌘</span>
+            <h3>Keyboard and shortcuts</h3>
+            <p>Type with the iPhone keyboard and send Mac modifiers, arrows, media keys, Spotlight, and Mission Control.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="feature-icon">◫</span>
+            <h3>Quick app launcher</h3>
+            <p>See running Mac apps beside the display and jump between them with one tap.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="feature-icon">⇧</span>
+            <h3>Wake, copy, and send</h3>
+            <p>Wake a supported sleeping Mac, sync clipboard text, and send files across your local network.</p>
+          </article>
+        </div>
+      </section>
+
+      <section class="demo-section">
+        <div class="demo-copy reveal">
+          <div class="eyebrow"><span></span> Real device demo</div>
+          <h2>See the Mac. Reach every control.</h2>
+          <p>The landscape layout was tested on a physical iPhone. Your Mac screen fits at the left, app shortcuts sit at the upper right, and the trackpad stays in the lower-right corner.</p>
+          <ul class="check-list">
+            <li>Full screen remains visible without cropping</li>
+            <li>App buttons remain tappable after every refresh</li>
+            <li>Trackpad movement uses relative pointer control</li>
+          </ul>
+        </div>
+        <div class="demo-gallery reveal">
+          <figure class="demo-main">
+            <img src="/assets/demo-remote-control.png" alt="Landscape iPhone remote-control screen showing the Mac and trackpad" loading="lazy" />
+            <figcaption><span>Remote control</span><small>Fit display · app launcher · trackpad</small></figcaption>
+          </figure>
+          <figure>
+            <img src="/assets/demo-mac-detail.png" alt="Mac connection details in the Mac Remote iPhone app" loading="lazy" />
+            <figcaption><span>Connect securely</span><small>Remembered Mac · one-tap connect</small></figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section setup-section" id="setup">
+        <div class="section-heading reveal">
+          <div class="eyebrow"><span></span> Setup</div>
+          <h2>From source to remote control in four steps.</h2>
+          <p>A free Apple ID works. Because Mac Remote is not yet distributed through the App Store, the iPhone build must be signed once in Xcode.</p>
+        </div>
+
+        <div class="steps">
+          <article class="step reveal">
+            <span>1</span>
+            <div><h3>Download the project</h3><p>Get the latest source, install XcodeGen, and generate the Xcode project.</p></div>
+            <button class="copy-command" type="button" data-copy="brew install xcodegen && xcodegen generate" aria-label="Copy setup command"><code>brew install xcodegen &amp;&amp; xcodegen generate</code><b>Copy</b></button>
+          </article>
+          <article class="step reveal">
+            <span>2</span>
+            <div><h3>Choose your Personal Team</h3><p>Open <code>MacRemote.xcodeproj</code>. In Signing &amp; Capabilities, choose your Apple ID team for the Mac and iPhone targets, then use unique bundle identifiers.</p></div>
+          </article>
+          <article class="step reveal">
+            <span>3</span>
+            <div><h3>Run both apps</h3><p>Run <b>MacRemoteHost</b> on the Mac, then connect the iPhone by cable once and run <b>iPhoneRemote</b>.</p></div>
+          </article>
+          <article class="step reveal">
+            <span>4</span>
+            <div><h3>Grant, pair, control</h3><p>Allow Screen Recording and Accessibility on the Mac. Open Pair New Device, enter the six-digit code on iPhone, then choose Start Remote Control.</p></div>
+          </article>
+        </div>
+        <div class="setup-note reveal">
+          <span>Good to know</span>
+          <p>Apps signed with a free Personal Team usually need to be reinstalled from Xcode every seven days. A paid Apple Developer membership, TestFlight, or the App Store removes that development limitation.</p>
+          <a href="https://github.com/CharmTzy/MacRemote/blob/main/SETUP.md">Open the detailed setup guide →</a>
+        </div>
+      </section>
+
+      <section class="section" id="controls">
+        <div class="section-heading reveal">
+          <div class="eyebrow"><span></span> How to use it</div>
+          <h2>Natural gestures, Mac results.</h2>
+        </div>
+        <div class="controls-grid reveal">
+          <div class="control-row"><span>Tap</span><p>Left-click at the touched point in Direct Touch, or click the pointer in Trackpad mode.</p><b>1 finger</b></div>
+          <div class="control-row"><span>Double-tap</span><p>Double-click files, folders, title bars, and controls.</p><b>2 taps</b></div>
+          <div class="control-row"><span>Long-press</span><p>Open the Mac context menu with a right-click.</p><b>Hold</b></div>
+          <div class="control-row"><span>Drag</span><p>Move windows, select text, and drag files while keeping the pointer down.</p><b>Move</b></div>
+          <div class="control-row"><span>Two-finger swipe</span><p>Scroll pages and documents. Natural scrolling is configurable in Settings.</p><b>2 fingers</b></div>
+          <div class="control-row"><span>App icon</span><p>Bring any running Mac application to the front from the quick launcher.</p><b>Tap icon</b></div>
+        </div>
+      </section>
+
+      <section class="download-section" id="download">
+        <div class="download-orbit one" aria-hidden="true"></div>
+        <div class="download-orbit two" aria-hidden="true"></div>
+        <div class="download-copy reveal">
+          <img src="/assets/app-icon.png" alt="Mac Remote app icon" width="92" height="92" />
+          <div class="eyebrow"><span></span> Version 0.1.0</div>
+          <h2>Take control.</h2>
+          <p>Download the Mac build and iPhone developer package, or clone the complete MIT-licensed source from GitHub.</p>
+        </div>
+        <div class="download-grid reveal">
+          <a class="download-card" href="https://github.com/CharmTzy/MacRemote/releases/latest/download/Mac-Remote-macOS.zip">
+            <span class="platform-icon">⌘</span>
+            <div><small>macOS 14+</small><strong>Download for Mac</strong><p>Host application · ZIP</p></div>
+            <i>↓</i>
+          </a>
+          <a class="download-card" href="https://github.com/CharmTzy/MacRemote/releases/latest/download/Mac-Remote-iPhone.ipa">
+            <span class="platform-icon">▯</span>
+            <div><small>iOS 17+</small><strong>Download iPhone package</strong><p>Developer IPA · requires signing</p></div>
+            <i>↓</i>
+          </a>
+          <a class="download-card source-card" href="https://github.com/CharmTzy/MacRemote/archive/refs/heads/main.zip">
+            <span class="platform-icon">&lt;/&gt;</span>
+            <div><small>MIT licensed</small><strong>Download source</strong><p>Mac + iPhone · ZIP</p></div>
+            <i>↓</i>
+          </a>
+        </div>
+        <p class="download-caveat reveal">The iPhone IPA is an unsigned developer package. Apple requires it to be signed with your own team before installation. For the smoothest setup, download the source and run the iPhone target from Xcode.</p>
+      </section>
+
+      <section class="section" id="docs">
+        <div class="section-heading reveal">
+          <div class="eyebrow"><span></span> Documentation</div>
+          <h2>Understand every layer.</h2>
+          <p>Start with setup, or go deeper into the peer-to-peer protocol and security model.</p>
+        </div>
+        <div class="docs-grid">
+          <a class="doc-card reveal" href="https://github.com/CharmTzy/MacRemote/blob/main/SETUP.md"><span>01</span><h3>Setup guide</h3><p>Signing, devices, permissions, pairing, and first connection.</p><b>Read guide →</b></a>
+          <a class="doc-card reveal" href="https://github.com/CharmTzy/MacRemote/blob/main/ARCHITECTURE.md"><span>02</span><h3>Architecture</h3><p>Targets, data flow, concurrency, capture, encoding, and input.</p><b>Explore design →</b></a>
+          <a class="doc-card reveal" href="https://github.com/CharmTzy/MacRemote/blob/main/SECURITY.md"><span>03</span><h3>Security</h3><p>Pairing, identities, encryption, trust boundaries, and limitations.</p><b>Review security →</b></a>
+          <a class="doc-card reveal" href="https://github.com/CharmTzy/MacRemote/blob/main/PROTOCOL.md"><span>04</span><h3>Protocol</h3><p>Wire format, encrypted messages, video transport, and commands.</p><b>View protocol →</b></a>
+        </div>
+      </section>
+
+      <section class="section faq-section" id="faq">
+        <div class="section-heading reveal"><div class="eyebrow"><span></span> Help</div><h2>Questions, answered.</h2></div>
+        <div class="faq-list reveal">
+          <details><summary>Why can’t my iPhone find the Mac?<i>+</i></summary><p>Keep both devices on the same Wi-Fi, turn off VPNs during discovery, and avoid guest or corporate networks that isolate clients. If Bonjour is blocked, use Add by IP Address with the address shown in the Mac app.</p></details>
+          <details><summary>Can it turn on a fully shut-down MacBook?<i>+</i></summary><p>No. Wake-on-LAN works when supported hardware is sleeping, connected to power, and Wake for network access is enabled. A shut-down MacBook’s Wi-Fi hardware is not listening for the wake packet.</p></details>
+          <details><summary>Why do I see black space beside the screen?<i>+</i></summary><p>The Mac and iPhone have different aspect ratios. Fit mode keeps the complete Mac display visible and uses the spare right area for app shortcuts and the trackpad instead of cropping your screen.</p></details>
+          <details><summary>Does the screen go through a cloud server?<i>+</i></summary><p>No. Discovery and control happen directly between your Mac and iPhone on the local network. After pairing, application traffic is encrypted with keys established by the two devices.</p></details>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <div class="footer-brand"><img src="/assets/app-icon.png" alt="" width="48" height="48" /><div><strong>Mac Remote</strong><span>Your Mac, from your iPhone.</span></div></div>
+      <div class="footer-links"><a href="https://github.com/CharmTzy/MacRemote">GitHub</a><a href="https://github.com/CharmTzy/MacRemote/issues">Issues</a><a href="https://github.com/CharmTzy/MacRemote/blob/main/LICENSE">MIT License</a><a href="#docs">Docs</a></div>
+      <p>© <span data-year></span> Mac Remote. Open source under MIT.</p>
+    </footer>
+  </body>
+</html>
