@@ -24,8 +24,6 @@ The landscape controller keeps the complete Mac display on the left, running-app
 
 Built natively with SwiftUI, Network.framework, ScreenCaptureKit, VideoToolbox, and CryptoKit — not WebRTC, and not a hosted signaling service. Screen and input traffic go directly between your iPhone and Mac.
 
-<img src="docs/images/mac-detail.png" alt="Mac Remote connection screen on iPhone showing a remembered Mac and a one-tap Connect button" width="100%" />
-
 The connection screen discovers nearby Macs over Bonjour and remembers them for one-tap reconnection.
 
 ## Download
