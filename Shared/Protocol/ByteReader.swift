@@ -80,6 +80,17 @@ struct ByteReader {
         return try readBytes(Int(length))
     }
 
+    /// Reads exactly `count` raw bytes without a length prefix. Used by
+    /// fixed-layout third-party wire formats (e.g. PCP), not by our own.
+    mutating func readRawBytes(_ count: Int) throws -> Data {
+        try readBytes(count)
+    }
+
+    /// Skips `count` bytes. Counterpart to `writeRawData` for padding.
+    mutating func discard(_ count: Int) throws {
+        _ = try readBytes(count)
+    }
+
     mutating func readUUID() throws -> UUID {
         guard let uuid = UUID(uuidString: try readString()) else {
             throw ReadError.invalidUUID

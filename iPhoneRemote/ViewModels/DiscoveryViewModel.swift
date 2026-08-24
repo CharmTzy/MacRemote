@@ -9,7 +9,9 @@ final class DiscoveryViewModel: ObservableObject {
 
     private let browser = BonjourBrowser()
     private let trustedDevices = TrustedDeviceStore()
+    private let anywhereDirectory = AnywhereDirectory()
     private var listenTask: Task<Void, Never>?
+    private var lastBrowseResults: Set<NWBrowser.Result> = []
 
     func start() {
         guard listenTask == nil else { return }
@@ -28,6 +30,19 @@ final class DiscoveryViewModel: ObservableObject {
                 }
             }
         }
+        refreshAnywhereDirectory()
+    }
+
+    /// Fetches the iCloud reachability records for every paired Mac and
+    /// re-renders the list with fresh internet candidates. Runs alongside
+    /// Bonjour; failure here just means the list relies on remembered
+    /// endpoints instead.
+    func refreshAnywhereDirectory() {
+        let pairedIDs = trustedDevices.all().map(\.id)
+        Task { [weak self] in
+            await self?.anywhereDirectory.refresh(for: pairedIDs)
+            self?.applyResults(self?.lastBrowseResults ?? [])
+        }
     }
 
     func stop() {
@@ -36,10 +51,12 @@ final class DiscoveryViewModel: ObservableObject {
         let browser = self.browser
         Task { await browser.stop() }
         isSearching = false
+        lastBrowseResults = []
         discoveredMacs.removeAll()
     }
 
     private func applyResults(_ results: Set<NWBrowser.Result>) {
+        lastBrowseResults = results
         let liveMacs = results.compactMap { result -> DiscoveredMac? in
             guard case .service(let name, _, _, _) = result.endpoint else { return nil }
 
@@ -71,6 +88,11 @@ final class DiscoveryViewModel: ObservableObject {
                 )
             }
 
+            // Even for a Mac that's visible right now, keep its internet
+            // endpoints around — leaving Wi-Fi mid-session shouldn't strand
+            // the connection.
+            let candidates = internetCandidates(for: deviceID, lanIPv4: ipv4Address)
+
             return DiscoveredMac(
                 id: deviceID?.uuidString ?? name,
                 name: displayName,
@@ -80,23 +102,29 @@ final class DiscoveryViewModel: ObservableObject {
                 deviceID: deviceID,
                 ipv4Address: ipv4Address,
                 broadcastAddress: broadcastAddress,
-                wakeMACAddress: wakeMACAddress
+                wakeMACAddress: wakeMACAddress,
+                internetCandidates: candidates
             )
         }
 
         let liveIDs = Set(liveMacs.compactMap(\.deviceID))
         let rememberedMacs = trustedDevices.all().compactMap { record -> DiscoveredMac? in
-            guard !liveIDs.contains(record.id), let host = record.lastKnownIPv4Address else { return nil }
+            guard !liveIDs.contains(record.id) else { return nil }
+            let host = record.lastKnownIPv4Address
+            let candidates = mergedCandidates(record: record, deviceID: record.id)
+            guard !candidates.isEmpty else { return nil }
+
             return DiscoveredMac(
                 id: record.id.uuidString,
                 name: record.name,
                 model: record.model,
-                endpoint: .hostPort(host: NWEndpoint.Host(host), port: ServiceConstants.defaultPort),
+                endpoint: .hostPort(host: NWEndpoint.Host(host ?? candidates[0].host), port: ServiceConstants.defaultPort),
                 state: .offline,
                 deviceID: record.id,
                 ipv4Address: host,
                 broadcastAddress: record.lastKnownBroadcastAddress,
-                wakeMACAddress: record.wakeMACAddress
+                wakeMACAddress: record.wakeMACAddress,
+                internetCandidates: candidates
             )
         }
 
@@ -105,5 +133,32 @@ final class DiscoveryViewModel: ObservableObject {
                 if lhs.state != rhs.state { return lhs.state == .available }
                 return lhs.name.localizedCaseInsensitiveCompare(rhs.name) == .orderedAscending
             }
+    }
+
+    private func internetCandidates(for deviceID: UUID?, lanIPv4: String?) -> [ConnectCandidate] {
+        guard let deviceID else { return [] }
+        var snapshot = anywhereDirectory.snapshot(for: deviceID) ?? ReachabilitySnapshot()
+        // Even for a Mac we can see right now, remember its mesh-VPN
+        // address so cellular connections later dial it directly.
+        if snapshot.vpnIPv4Addresses.isEmpty,
+           let record = trustedDevices.record(for: deviceID) {
+            snapshot.vpnIPv4Addresses = record.knownVPNAddresses
+        }
+        if snapshot.lanIPv4Address == nil { snapshot.lanIPv4Address = lanIPv4 }
+        return ConnectCandidateBuilder.candidates(from: snapshot)
+    }
+
+    /// Fresh iCloud data first; anything it doesn't have falls back to what
+    /// the Mac itself told us during past sessions (trust-store fields).
+    private func mergedCandidates(record: PairedDeviceRecord, deviceID: UUID) -> [ConnectCandidate] {
+        var snapshot = anywhereDirectory.snapshot(for: deviceID) ?? ReachabilitySnapshot(
+            lanIPv4Address: record.lastKnownIPv4Address,
+            wanIPv4Address: record.lastKnownWANIPv4Address,
+            externalPort: record.lastKnownExternalPort,
+            ipv6Addresses: record.knownIPv6Addresses,
+            vpnIPv4Addresses: record.knownVPNAddresses
+        )
+        if snapshot.lanIPv4Address == nil { snapshot.lanIPv4Address = record.lastKnownIPv4Address }
+        return ConnectCandidateBuilder.candidates(from: snapshot)
     }
 }

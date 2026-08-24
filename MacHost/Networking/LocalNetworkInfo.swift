@@ -16,6 +16,39 @@ enum LocalNetworkInfo {
         primaryInterface()?.ipv4Address
     }
 
+    /// Every global-scope IPv6 address on any up `en*` interface. Published
+    /// so an iPhone on another network can dial us directly when both sides
+    /// have IPv6 — cellular always does, and IPv6 needs no port mapping.
+    /// Empty on IPv4-only networks.
+    static func globalIPv6Addresses() -> [String] {
+        var interfaceListPointer: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&interfaceListPointer) == 0, let firstInterface = interfaceListPointer else {
+            return []
+        }
+        defer { freeifaddrs(interfaceListPointer) }
+
+        let interfaces = Array(sequence(first: firstInterface, next: { $0.pointee.ifa_next }))
+        var seen = Set<String>()
+        var addresses: [String] = []
+        for entry in interfaces {
+            let flags = entry.pointee.ifa_flags
+            let isUpAndRunning = (flags & UInt32(IFF_UP)) != 0 && (flags & UInt32(IFF_RUNNING)) != 0
+            guard isUpAndRunning, (flags & UInt32(IFF_LOOPBACK)) == 0,
+                  let socketAddress = entry.pointee.ifa_addr,
+                  socketAddress.pointee.sa_family == UInt8(AF_INET6),
+                  String(cString: entry.pointee.ifa_name).hasPrefix("en"),
+                  let addressString = numericHost(for: socketAddress) else { continue }
+
+            // numericHost appends a %interface scope suffix for link-local
+            // addresses; strip it before validation/dedup.
+            let bare = addressString.split(separator: "%").first.map(String.init) ?? addressString
+            guard ConnectCandidateBuilder.isValidGlobalIPv6(bare),
+                  seen.insert(bare.lowercased()).inserted else { continue }
+            addresses.append(bare)
+        }
+        return addresses
+    }
+
     static func primaryInterface() -> InterfaceDetails? {
         var interfaceListPointer: UnsafeMutablePointer<ifaddrs>?
 
@@ -52,6 +85,34 @@ enum LocalNetworkInfo {
             broadcastAddress: broadcastAddress,
             macAddress: macAddress
         )
+    }
+
+    /// Mesh-VPN addresses assigned to this Mac — Tailscale and similar
+    /// overlays use the 100.64.0.0/10 range on `utun*` interfaces. These
+    /// are reachable from any network once both peers run the same VPN,
+    /// making them the most dependable cross-network path.
+    static func meshVPNIPv4Addresses() -> [String] {
+        var interfaceListPointer: UnsafeMutablePointer<ifaddrs>?
+        guard getifaddrs(&interfaceListPointer) == 0, let firstInterface = interfaceListPointer else {
+            return []
+        }
+        defer { freeifaddrs(interfaceListPointer) }
+
+        let interfaces = Array(sequence(first: firstInterface, next: { $0.pointee.ifa_next }))
+        var seen = Set<String>()
+        var addresses: [String] = []
+        for entry in interfaces {
+            let flags = entry.pointee.ifa_flags
+            guard (flags & UInt32(IFF_UP)) != 0, (flags & UInt32(IFF_LOOPBACK)) == 0,
+                  let socketAddress = entry.pointee.ifa_addr,
+                  socketAddress.pointee.sa_family == UInt8(AF_INET),
+                  let addressString = numericHost(for: socketAddress) else { continue }
+
+            guard ConnectCandidateBuilder.isMeshVPNIPv4(addressString),
+                  seen.insert(addressString).inserted else { continue }
+            addresses.append(addressString)
+        }
+        return addresses
     }
 
     private static func numericHost(for address: UnsafePointer<sockaddr>) -> String? {

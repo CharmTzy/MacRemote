@@ -28,4 +28,12 @@ enum ServiceConstants {
         static let broadcastAddress = "broadcast"
         static let wakeMACAddress = "wake"
     }
+
+    /// iCloud container used as the cross-network rendezvous: the Mac
+    /// publishes its current addresses there, the iPhone reads them when
+    /// Bonjour can't see it. Both apps must declare this same container in
+    /// their entitlements, and both devices must be signed into the same
+    /// Apple ID (the database is the account's private one — nothing is
+    /// ever shared publicly). See SETUP.md if you change bundle IDs.
+    static let cloudContainerIdentifier = "iCloud.com.example.MacRemote"
 }

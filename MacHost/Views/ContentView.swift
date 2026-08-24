@@ -34,7 +34,7 @@ struct ContentView: View {
                     Text("MAC REMOTE")
                         .font(.caption.weight(.bold))
                         .tracking(1)
-                    Text("Private local control")
+                    Text("Private remote control")
                         .font(.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -50,7 +50,7 @@ struct ContentView: View {
         } detail: {
             switch selection {
             case .overview, .none:
-                OverviewView().environmentObject(sessionManager)
+                OverviewView().environmentObject(sessionManager).environmentObject(sessionManager.reachability)
             case .devices:
                 DevicesView().environmentObject(sessionManager)
             case .display:

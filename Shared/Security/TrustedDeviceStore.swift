@@ -46,8 +46,34 @@ struct TrustedDeviceStore {
             pairedAt: existing.pairedAt,
             lastKnownIPv4Address: ipv4Address ?? existing.lastKnownIPv4Address,
             lastKnownBroadcastAddress: broadcastAddress ?? existing.lastKnownBroadcastAddress,
-            wakeMACAddress: wakeMACAddress ?? existing.wakeMACAddress
+            wakeMACAddress: wakeMACAddress ?? existing.wakeMACAddress,
+            lastKnownWANIPv4Address: existing.lastKnownWANIPv4Address,
+            lastKnownExternalPort: existing.lastKnownExternalPort,
+            knownIPv6Addresses: existing.knownIPv6Addresses
         )
+        try? save(updated)
+    }
+
+    /// Persists the internet-reachable endpoints a Mac reported about itself
+    /// (`reachabilityUpdate`), so future connections can dial it from any
+    /// network. Values that are nil leave what's already stored in place.
+    func updateInternetEndpoints(deviceID: UUID, payload: ReachabilityUpdatePayload) {
+        guard var updated = record(for: deviceID) else { return }
+        if let wan = payload.wanIPv4Address, !wan.isEmpty {
+            updated.lastKnownWANIPv4Address = wan
+        }
+        if let port = payload.externalPort {
+            updated.lastKnownExternalPort = port
+        }
+        if !payload.ipv6Addresses.isEmpty {
+            updated.knownIPv6Addresses = payload.ipv6Addresses
+        }
+        if !payload.vpnIPv4Addresses.isEmpty {
+            updated.knownVPNAddresses = ConnectCandidateBuilder.dedupedVPNIPv4(payload.vpnIPv4Addresses)
+        }
+        if let wakeMAC = payload.wakeMACAddress, !wakeMAC.isEmpty {
+            updated.wakeMACAddress = wakeMAC
+        }
         try? save(updated)
     }
 

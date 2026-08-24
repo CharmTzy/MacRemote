@@ -16,6 +16,34 @@ final class VideoContentGeometryTests: XCTestCase {
         XCTAssertEqual(geometry.contentRect.minY, 0, accuracy: 0.001)
     }
 
+    func testTrailingFitAnchorsVideoToRightEdge() {
+        let geometry = VideoContentGeometry(
+            contentSize: CGSize(width: 16, height: 10),
+            viewSize: CGSize(width: 1000, height: 500),
+            scalingMode: .aspectFit,
+            horizontalAlignment: .trailing
+        )
+
+        XCTAssertEqual(geometry.contentRect.maxX, 1000, accuracy: 0.001)
+        XCTAssertEqual(geometry.contentRect.minX, 200, accuracy: 0.001)
+        XCTAssertEqual(geometry.contentRect.width, 800, accuracy: 0.001)
+    }
+
+    func testTrailingTouchMappingStaysAlignedWithRenderedVideo() {
+        let geometry = VideoContentGeometry(
+            contentSize: CGSize(width: 16, height: 10),
+            viewSize: CGSize(width: 1000, height: 500),
+            scalingMode: .aspectFit,
+            horizontalAlignment: .trailing
+        )
+
+        // Left edge of the video maps to normalized 0, right edge to 1 —
+        // the shift right must not skew the touch→screen mapping.
+        XCTAssertEqual(geometry.normalizedPoint(for: CGPoint(x: 200, y: 250))?.x ?? -1, 0, accuracy: 0.001)
+        XCTAssertEqual(geometry.normalizedPoint(for: CGPoint(x: 1000, y: 250))?.x ?? -1, 1, accuracy: 0.001)
+        XCTAssertNil(geometry.normalizedPoint(for: CGPoint(x: 150, y: 250)))
+    }
+
     func testMatchingAspectRatioFillsWholeView() {
         let geometry = VideoContentGeometry(contentSize: CGSize(width: 1920, height: 1080), viewSize: CGSize(width: 960, height: 540))
         XCTAssertEqual(geometry.contentRect, CGRect(x: 0, y: 0, width: 960, height: 540))

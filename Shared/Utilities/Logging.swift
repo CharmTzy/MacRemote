@@ -17,4 +17,6 @@ enum Logging {
     static let decoder = Logger(subsystem: subsystem, category: "Decoder")
     static let input = Logger(subsystem: subsystem, category: "Input")
     static let session = Logger(subsystem: subsystem, category: "Session")
+    static let anywhere = Logger(subsystem: subsystem, category: "Anywhere")
+    static let power = Logger(subsystem: subsystem, category: "Power")
 }

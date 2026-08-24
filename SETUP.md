@@ -52,6 +52,15 @@ then regenerate:
 xcodegen generate
 ```
 
+**iCloud container note:** the two apps share one iCloud container
+(`iCloud.com.example.MacRemote`, set in `Shared/Networking/
+ServiceConstants.swift` and both entitlements files in `project.yml`). If
+you rename your bundle IDs and Xcode's automatic signing complains about
+the iCloud capability, change `cloudContainerIdentifier` to match your new
+prefix on **both** apps (e.g. `iCloud.com.yourname.macremote`) and
+regenerate — the Mac writes its address records there, the iPhone reads
+them, so they must agree.
+
 ## 5. Select your Personal Team
 
 For **both** the `MacRemoteHost` and `iPhoneRemote` targets:
@@ -110,7 +119,39 @@ most commonly it's a Wi-Fi network that blocks Bonjour's multicast traffic
 list screen is the fallback; the Mac's address and port are on its
 Overview screen.
 
-## 10. Enable wake from sleep (optional)
+## 10. Sign into iCloud on both devices (for anywhere access)
+
+Control from another network (cellular, different Wi-Fi) uses your iCloud
+private database as the rendezvous point, so:
+
+- The Mac and iPhone must be signed into the **same Apple ID**
+  (System Settings → Apple ID on the Mac; Settings → \[your name\] on iOS)
+- iCloud Drive should be enabled for both
+
+The first pairing still has to happen once on the same Wi-Fi — after that,
+the Mac's Overview screen shows an **Anywhere Access** card: "Ready" with
+your public address when cross-network control is available, or the reason
+it isn't (router declined UPnP, carrier-grade NAT, iCloud unavailable).
+From then on, connecting from anywhere works exactly like connecting at
+home: tap the Mac, tap Connect — the app tries nearby first, then IPv6,
+then over the internet.
+
+If your router's UPnP is off, enable it (usually under LAN/Advanced
+settings) or add a manual port-forward rule for TCP `53511` to the Mac.
+The Overview card tells you which case applies.
+
+## 11. Screen-off behavior
+
+The Mac stays connectable whenever the host app is open, display asleep or
+not: close the lid or let the screen sleep and the iPhone can still connect
+and control it (trackpad + keyboard work without video; the stream resumes
+when the display wakes). Two hardware limits remain:
+
+- A MacBook that closes its lid **on battery** will always sleep — keep it
+  plugged in if you want lid-closed availability
+- A shut-down Mac is unreachable; use **Wake Mac** (below) instead
+
+## 12. Enable wake from sleep (optional)
 
 On a MacBook, connect the charger and enable **System Settings → Battery →
 Options → Wake for network access**. Open the updated Mac host and iPhone app

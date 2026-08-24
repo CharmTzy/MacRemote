@@ -2,6 +2,7 @@ import SwiftUI
 
 struct OverviewView: View {
     @EnvironmentObject private var sessionManager: HostSessionManager
+    @EnvironmentObject private var reachability: ReachabilityController
     @StateObject private var viewModel = OverviewViewModel()
     @StateObject private var permissions = PermissionsViewModel()
 
@@ -21,6 +22,12 @@ struct OverviewView: View {
                             value: viewModel.ipAddress ?? "Unavailable",
                             detail: "Port \(ServiceConstants.defaultControlPort)",
                             icon: "network"
+                        )
+                        metricCard(
+                            title: "Anywhere Access",
+                            value: anywhereValue,
+                            detail: anywhereDetail,
+                            icon: "globe"
                         )
                         metricCard(
                             title: "Remote Wake",
@@ -46,7 +53,6 @@ struct OverviewView: View {
                 .padding(28)
             }
         }
-        .environment(\.colorScheme, .dark)
         .navigationTitle("Overview")
         .onAppear {
             viewModel.refresh()
@@ -54,11 +60,33 @@ struct OverviewView: View {
         }
     }
 
+    private var anywhereValue: String {
+        switch reachability.status {
+        case .checking: return "Checking…"
+        case .active: return "Ready"
+        case .degraded: return "LAN only"
+        case .unavailable: return "Limited"
+        }
+    }
+
+    private var anywhereDetail: String {
+        switch reachability.status {
+        case .checking:
+            return "Finding ways to reach this Mac"
+        case .active(let summary):
+            return "Reachable from the internet · \(summary)"
+        case .degraded(let summary):
+            return "\(summary) — same-Wi-Fi control still works"
+        case .unavailable(let reason):
+            return reason
+        }
+    }
+
     private var hero: some View {
         HStack(spacing: 18) {
             Image(systemName: "rectangle.connected.to.line.below")
                 .font(.system(size: 35, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .frame(width: 76, height: 76)
                 .background(BrandTheme.accentGradient, in: RoundedRectangle(cornerRadius: 22, style: .continuous))
 
@@ -67,7 +95,7 @@ struct OverviewView: View {
                     .font(.largeTitle.weight(.bold))
                 Text(viewModel.computerName)
                     .font(.title3)
-                    .foregroundStyle(.white.opacity(0.62))
+                    .foregroundStyle(.secondary)
                 Label(
                     sessionManager.isAdvertising ? "Ready for secure connections" : "Not visible on the network",
                     systemImage: sessionManager.isAdvertising ? "checkmark.circle.fill" : "exclamationmark.triangle.fill"
@@ -95,7 +123,7 @@ struct OverviewView: View {
                 .lineLimit(1)
             Text(detail)
                 .font(.caption)
-                .foregroundStyle(.white.opacity(0.5))
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(18)
@@ -107,7 +135,7 @@ struct OverviewView: View {
             Label("Permissions", systemImage: "lock.shield.fill")
                 .font(.headline)
             permissionRow("Screen Recording", granted: permissions.screenRecordingGranted)
-            Divider().overlay(Color.white.opacity(0.12))
+            Divider().overlay(Color.primary.opacity(0.12))
             permissionRow("Accessibility", granted: permissions.accessibilityGranted)
             if !permissions.allPermissionsGranted {
                 Text("Open the Permissions tab to finish setup before controlling this Mac.")
@@ -132,7 +160,7 @@ struct OverviewView: View {
                         Text(peer.name).fontWeight(.medium)
                         Text(peer.model)
                             .font(.caption)
-                            .foregroundStyle(.white.opacity(0.5))
+                            .foregroundStyle(.secondary)
                     }
                     Spacer()
                     Text("Encrypted")

@@ -15,6 +15,11 @@ struct DiscoveredMac: Identifiable, Equatable, Hashable {
     let ipv4Address: String?
     let broadcastAddress: String?
     let wakeMACAddress: String?
+    /// Extra ways to dial this Mac when the primary endpoint can't be
+    /// reached (different Wi-Fi network, cellular): public IPv4 + mapped
+    /// port and global IPv6 addresses learned via iCloud or past sessions.
+    /// Ordered by preference — see `ConnectCandidateBuilder`.
+    var internetCandidates: [ConnectCandidate]
 
     init(
         id: String,
@@ -25,7 +30,8 @@ struct DiscoveredMac: Identifiable, Equatable, Hashable {
         deviceID: UUID? = nil,
         ipv4Address: String? = nil,
         broadcastAddress: String? = nil,
-        wakeMACAddress: String? = nil
+        wakeMACAddress: String? = nil,
+        internetCandidates: [ConnectCandidate] = []
     ) {
         self.id = id
         self.name = name
@@ -36,11 +42,13 @@ struct DiscoveredMac: Identifiable, Equatable, Hashable {
         self.ipv4Address = ipv4Address
         self.broadcastAddress = broadcastAddress
         self.wakeMACAddress = wakeMACAddress
+        self.internetCandidates = internetCandidates
     }
 
     static func == (lhs: DiscoveredMac, rhs: DiscoveredMac) -> Bool {
         lhs.id == rhs.id && lhs.name == rhs.name && lhs.model == rhs.model && lhs.state == rhs.state &&
-            lhs.ipv4Address == rhs.ipv4Address && lhs.wakeMACAddress == rhs.wakeMACAddress
+            lhs.ipv4Address == rhs.ipv4Address && lhs.wakeMACAddress == rhs.wakeMACAddress &&
+            lhs.internetCandidates == rhs.internetCandidates
     }
 
     func hash(into hasher: inout Hasher) {

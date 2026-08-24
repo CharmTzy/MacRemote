@@ -18,7 +18,7 @@ struct MacsListView: View {
                             Text("YOUR MACS")
                                 .font(.caption.weight(.bold))
                                 .tracking(1.2)
-                                .foregroundStyle(.white.opacity(0.55))
+                                .foregroundStyle(.secondary)
                             Spacer()
                             if discovery.isSearching {
                                 HStack(spacing: 6) {
@@ -26,7 +26,7 @@ struct MacsListView: View {
                                     Text("Searching")
                                 }
                                 .font(.caption)
-                                .foregroundStyle(.white.opacity(0.6))
+                                .foregroundStyle(.secondary)
                             }
                         }
 
@@ -46,7 +46,7 @@ struct MacsListView: View {
                         } label: {
                             Label("Connect by IP Address", systemImage: "plus.circle.fill")
                                 .font(.headline)
-                                .foregroundStyle(.white)
+                                .foregroundStyle(.primary)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 15)
                                 .brandCard(cornerRadius: 18)
@@ -59,7 +59,6 @@ struct MacsListView: View {
             }
             .navigationTitle("Mac Remote")
             .navigationBarTitleDisplayMode(.inline)
-            .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbarBackground(.hidden, for: .navigationBar)
             .navigationDestination(for: DiscoveredMac.self) { mac in
                 MacDetailView(mac: mac)
@@ -70,7 +69,7 @@ struct MacsListView: View {
                         showingSettings = true
                     } label: {
                         Image(systemName: "slider.horizontal.3")
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                     }
                     .accessibilityLabel("Settings")
                 }
@@ -87,17 +86,17 @@ struct MacsListView: View {
         HStack(spacing: 15) {
             Image(systemName: "rectangle.connected.to.line.below")
                 .font(.system(size: 28, weight: .semibold))
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .frame(width: 58, height: 58)
                 .background(BrandTheme.accentGradient, in: RoundedRectangle(cornerRadius: 17, style: .continuous))
 
             VStack(alignment: .leading, spacing: 4) {
-                Text("Your Mac, anywhere nearby")
+                Text("Your Mac, anywhere")
                     .font(.title3.weight(.bold))
-                    .foregroundStyle(.white)
-                Text("Private, encrypted control on your local network.")
+                    .foregroundStyle(.primary)
+                Text("Private, encrypted control — same Wi-Fi or over the internet.")
                     .font(.subheadline)
-                    .foregroundStyle(.white.opacity(0.62))
+                    .foregroundStyle(.secondary)
             }
         }
         .padding(.top, 8)
@@ -110,11 +109,11 @@ struct MacsListView: View {
                 .foregroundStyle(BrandTheme.cyan)
             Text(discovery.isSearching ? "Looking for your Mac…" : "No Macs found")
                 .font(.headline)
-                .foregroundStyle(.white)
-            Text("Keep both devices on the same Wi-Fi network, or connect using the Mac's IP address.")
+                .foregroundStyle(.primary)
+            Text("Keep both devices on the same Wi-Fi network for the first pairing — after that, your paired Mac can be reached from anywhere.")
                 .font(.subheadline)
                 .multilineTextAlignment(.center)
-                .foregroundStyle(.white.opacity(0.55))
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 32)
@@ -133,9 +132,9 @@ private struct MacCard: View {
             ZStack(alignment: .bottomTrailing) {
                 Image(systemName: "macbook")
                     .font(.system(size: 25, weight: .medium))
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                     .frame(width: 52, height: 52)
-                    .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
+                    .background(Color.primary.opacity(0.06), in: RoundedRectangle(cornerRadius: 15, style: .continuous))
                 Circle()
                     .fill(isOnline ? Color.green : Color.orange)
                     .frame(width: 11, height: 11)
@@ -145,27 +144,37 @@ private struct MacCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(mac.name)
                     .font(.headline)
-                    .foregroundStyle(.white)
+                    .foregroundStyle(.primary)
                 Text(mac.model ?? "Mac")
                     .font(.caption)
-                    .foregroundStyle(.white.opacity(0.5))
+                    .foregroundStyle(.secondary)
             }
 
             Spacer()
 
             VStack(alignment: .trailing, spacing: 6) {
-                Text(isOnline ? "READY" : "OFFLINE")
+                Text(availabilityLabel)
                     .font(.caption2.weight(.bold))
                     .tracking(0.7)
-                    .foregroundStyle(isOnline ? BrandTheme.cyan : Color.orange)
+                    .foregroundStyle(availabilityColor)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
-                    .foregroundStyle(.white.opacity(0.35))
+                    .foregroundStyle(.tertiary)
             }
         }
         .padding(16)
         .brandCard()
         .accessibilityElement(children: .combine)
+    }
+
+    private var availabilityLabel: String {
+        if isOnline { return "READY" }
+        return mac.internetCandidates.isEmpty ? "OFFLINE" : "VIA INTERNET"
+    }
+
+    private var availabilityColor: Color {
+        if isOnline { return BrandTheme.cyan }
+        return mac.internetCandidates.isEmpty ? Color.orange : Color.green
     }
 }
 

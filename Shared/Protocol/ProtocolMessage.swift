@@ -10,6 +10,10 @@ enum ProtocolMessage: Sendable {
     case helloAck(HelloAckPayload)
     case ping(UInt64)
     case pong(UInt64)
+    /// Mac → iPhone, control connection, right after authentication and on
+    /// network changes: this Mac's dialable addresses (LAN, IPv6, WAN+mapped
+    /// port) so the iPhone can reach it from other networks later.
+    case reachabilityUpdate(ReachabilityUpdatePayload)
 
     // Authentication (Phase 2) — see PROTOCOL.md for the full sequence.
     case authBegin(AuthBeginPayload)
@@ -67,7 +71,7 @@ enum ProtocolMessage: Sendable {
 extension ProtocolMessage {
     var category: MessageCategory {
         switch self {
-        case .hello, .helloAck: return .session
+        case .hello, .helloAck, .reachabilityUpdate: return .session
         case .ping, .pong: return .heartbeat
         case .authBegin, .authChallenge, .sessionAuthResponse, .pairingConfirm, .identityExchange, .authResult, .secureEnvelope:
             return .authentication
@@ -94,6 +98,7 @@ extension ProtocolMessage {
         switch self {
         case .hello: return 1
         case .helloAck: return 2
+        case .reachabilityUpdate: return 3
         case .ping: return 1
         case .pong: return 2
         case .authBegin: return 1
@@ -134,6 +139,7 @@ extension ProtocolMessage {
         switch self {
         case .hello(let payload): payload.encode(into: &writer)
         case .helloAck(let payload): payload.encode(into: &writer)
+        case .reachabilityUpdate(let payload): payload.encode(into: &writer)
         case .ping(let timestamp): writer.writeUInt64(timestamp)
         case .pong(let timestamp): writer.writeUInt64(timestamp)
         case .authBegin(let payload): payload.encode(into: &writer)
@@ -204,6 +210,7 @@ extension ProtocolMessage {
             switch type {
             case 1: return .hello(try HelloPayload.decode(from: &reader))
             case 2: return .helloAck(try HelloAckPayload.decode(from: &reader))
+            case 3: return .reachabilityUpdate(try ReachabilityUpdatePayload.decode(from: &reader))
             default: throw DecodeError.unknownType(category: category, type: type)
             }
         case .heartbeat:

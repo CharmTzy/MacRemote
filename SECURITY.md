@@ -187,6 +187,47 @@ commands silently no-op (logged, not surfaced back to the iPhone) — a real
 gap, accepted for now since Apple provides no preflight-check API for
 Automation the way it does for the other two permissions.
 
+## Anywhere access: what changed with cross-network reachability
+
+The original threat model assumed a LAN. "Connect from anywhere" adds two
+mechanisms, and it's worth being precise about what they do and don't
+expose:
+
+**iCloud rendezvous (`MacHost/Anywhere/ReachabilityPublisher.swift`,
+`iPhoneRemote/Anywhere/AnywhereDirectory.swift`).** The Mac publishes its
+current addresses — LAN IPv4, global IPv6 addresses, public IPv4 and the
+router-mapped external port, plus its Wake-on-LAN MAC address — to a record
+in your Apple ID's *private* CloudKit database. Only devices signed into
+the same Apple ID can read it; nothing is shared publicly. The published
+data is address metadata only: every field in it is already observable by
+anyone on either of your networks (a router's public IP is public by
+definition), and knowing these addresses grants nothing — authentication
+still requires proving possession of the Ed25519 private key from the
+pairing exchange. The same data also travels directly to any connected
+iPhone as an encrypted `reachabilityUpdate` message, so the iPhone keeps a
+local fallback copy.
+
+**Router port mapping (`MacHost/Anywhere/NATPortMapper.swift`).** The Mac
+asks your own router to forward TCP 53511 using PCP, NAT-PMP, or UPnP IGD,
+with a bounded lease renewed by the app. This makes the control port
+reachable from the internet — which means the internet-facing attack
+surface is now real, not theoretical. What protects it: the listener only
+speaks this app's protocol; unauthenticated peers get exactly one
+Hello/helloAck exchange before being dropped; pairing requires a 6-digit
+code shown on the Mac's screen (rate-limited to 5 wrong attempts per
+session) and both directions verify HMAC confirm-tags before any identity
+material crosses the wire; and session-authenticated connections derive all
+traffic keys from an X25519 exchange bound to both long-term keys.
+Scanning the internet for open port 53511 finds a service that reveals a
+device name and nothing else without a valid key pair.
+
+**What we'd flag if this were a product:** the iCloud record trusts Apple's
+identity infrastructure (a compromised Apple account could learn your home
+IP — but couldn't connect); the wake-MAC address in that record enables
+sending Wake-on-LAN packets to your LAN from outside only if the attacker
+is already inside your network or the ISP's CG-NAT fabric; and there's
+still no connection-level rate limiting.
+
 ## Not yet covered
 
 - **Denial of service**: nothing currently rate-limits connection attempts

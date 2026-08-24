@@ -85,9 +85,12 @@ schemes:
     build:
       targets:
         MacRemoteHost: all
-        MacRemoteSharedTests: [test]
     run:
       config: Debug
+  MacRemoteSharedTests:
+    build:
+      targets:
+        MacRemoteSharedTests: all
     test:
       config: Debug
       targets:

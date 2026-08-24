@@ -5,13 +5,15 @@
 [![Platforms](https://img.shields.io/badge/platforms-macOS%2014%2B%20%7C%20iOS%2017%2B-16c7d9.svg)](#system-requirements)
 [![Website](https://img.shields.io/badge/website-mac--remote.vercel.app-20c7d9.svg)](https://mac-remote.vercel.app)
 
-Control your Mac from your iPhone over your local network. No cloud, no
-accounts, no App Store — a Mac host app and an iPhone client app that find
-each other over Bonjour and talk directly, peer to peer, on your LAN.
+Control your Mac from your iPhone over your local network **or across the
+internet**. No accounts to create, no App Store — a Mac host app and an
+iPhone client app that find each other over Bonjour on your LAN, and stay
+reachable from anywhere via iCloud + automatic router setup once paired.
 
 This is a personal-use project, built from scratch on Apple's native
 frameworks (SwiftUI, Network.framework, ScreenCaptureKit, VideoToolbox,
-CryptoKit) rather than on top of WebRTC or a hosted signaling service.
+CloudKit, CryptoKit) rather than on top of WebRTC or a hosted signaling
+service.
 
 **[Open the Mac Remote website](https://mac-remote.vercel.app)** for the visual
 setup guide, controls, downloads, troubleshooting, and documentation.
@@ -92,6 +94,13 @@ list). What exists right now:
       accurate direct-touch and relative trackpad control, a live launcher for
       running Mac apps in Fit mode's unused margins, and Wake-on-LAN for a
       remembered Mac that is sleeping on the local network.
+- [x] Anywhere access — after pairing once with the 6-digit code, the
+      iPhone can reach the Mac from any network (cellular, another Wi-Fi):
+      the Mac publishes its addresses to your iCloud private database and
+      opens a path through the home router automatically (PCP / NAT-PMP /
+      UPnP, plus direct IPv6). The Mac also stays connectable while its own
+      display is asleep — only quitting the app or powering off takes it
+      away.
 
 **Every feature in the spec's success criteria is implemented**: discovery,
 pairing, permissions, live screen mirroring, direct-touch and trackpad
@@ -145,9 +154,48 @@ MacRemote/
 
 - A Mac running macOS 14 (Sonoma) or later, with Xcode 15 or later
 - An iPhone running iOS 17 or later
-- Both devices on the same Wi-Fi network (or a Mac personal hotspot)
+- Both devices on the same Wi-Fi network for the **first** pairing (or a Mac
+  personal hotspot); after that, see "Over the internet" below
+- Both devices signed into the same Apple ID for cross-network discovery —
+  the Mac publishes its addresses to your own private iCloud database, which
+  only your devices can read
 - A free Apple ID is enough — no paid Apple Developer Program membership
   is required for any of this. See `SETUP.md`.
+
+## Over the internet
+
+Once an iPhone has paired with the Mac, it remembers how to reach it from
+anywhere:
+
+1. **iCloud rendezvous.** The host app continuously publishes its current
+   addresses (LAN IP, global IPv6 addresses, public IPv4 + router-mapped
+   port) to your iCloud private database under the Mac's device ID. The
+   iPhone reads that record when Bonjour can't see the Mac.
+2. **Automatic router setup.** The Mac asks the router to forward its
+   control port using PCP, then NAT-PMP, then UPnP IGD — whichever the
+   router speaks — and renews the mapping automatically.
+3. **Direct IPv6.** When both networks have IPv6 (cellular always does), the
+   iPhone dials the Mac's IPv6 address directly with no port mapping at all.
+
+Connecting tries each path in order — nearby → IPv6 → internet — and shows
+what it's doing. If iCloud is unavailable, the iPhone falls back to the
+endpoints the Mac reported during past sessions; if those are stale too,
+"Connect by IP Address" always works as a manual last resort.
+
+**Limits no app can bypass:** if your ISP puts you behind carrier-grade NAT
+and neither network has IPv6, inbound connections can't get through — check
+the Anywhere Access card on the Mac's Overview screen, which reports this.
+And the Mac must be running: powered off means unreachable.
+
+## Screen off ≠ unavailable
+
+The host app holds a power assertion while it runs, so closing the lid or
+letting the display sleep doesn't suspend it — the iPhone can still connect
+and control the Mac blind (trackpad + keyboard work fine without seeing the
+screen). Video pauses with a notice and resumes automatically when the
+display wakes. Two hardware realities remain: a MacBook on battery *will*
+sleep when its lid closes (keep it plugged in for lid-closed availability),
+and a shut-down Mac is unreachable by definition.
 
 ## Running it
 
@@ -205,23 +253,35 @@ open (Devices tab) showing a 6-digit code, which you enter on the iPhone.
 After that, reconnecting doesn't need the code again — each device proved
 its identity once during pairing and gets recognized automatically from
 then on. See `SECURITY.md` for exactly what's protected and what the threat
-model does and doesn't cover — this is a LAN tool for personal devices, not
+model does and doesn't cover — this is a tool for personal devices, not
 a hardened multi-tenant product, and the docs say so plainly rather than
 overclaim.
 
 ## Troubleshooting
 
 **My iPhone doesn't see my Mac.** Confirm both devices are on the same
-Wi-Fi network (not one on Wi-Fi and one on cellular/VPN). Corporate or
-guest Wi-Fi networks often block the multicast traffic Bonjour needs (client
-isolation) — a home network or personal hotspot is the reliable path during
-development. You can always fall back to **Add by IP Address** using the
-address shown on the Mac's Overview screen.
+Wi-Fi network for the first pairing (not one on Wi-Fi and one on
+cellular/VPN). Corporate or guest Wi-Fi networks often block the multicast
+traffic Bonjour needs (client isolation) — a home network or personal
+hotspot is the reliable path during development. You can always fall back to
+**Add by IP Address** using the address shown on the Mac's Overview screen.
+
+**My Mac shows "LAN only" under Anywhere Access.** The router declined a
+port mapping — enable UPnP in its settings (often listed as UPnP/NAT-PMP
+under LAN or Advanced), or add a manual port-forward rule for TCP 53511 to
+the Mac. If your provider uses carrier-grade NAT, the card says so; IPv6 may
+still work automatically.
+
+**Connecting from cellular fails.** Check, in order: the Mac app is open;
+the Mac's Overview card says "Ready"; both devices are signed into the same
+Apple ID with iCloud available; and your router allows UPnP.
 
 **Xcode says my bundle identifier is already in use.** Free Personal Team
 accounts need a globally unique bundle ID. Change `com.example.MacRemote.host` /
 `com.example.MacRemote.mobile` in `project.yml` to something under your own name
-(e.g. `com.yourname.macremote.host`), then re-run `xcodegen generate`.
+(e.g. `com.yourname.macremote.host`), update the iCloud container in
+`ServiceConstants` / both entitlements files to match, then re-run
+`xcodegen generate`.
 
 **The app on my iPhone stops working after a week.** Free Personal Team
 provisioning profiles expire after 7 days. Re-run the app from Xcode with

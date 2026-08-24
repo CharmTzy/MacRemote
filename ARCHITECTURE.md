@@ -46,17 +46,25 @@ to `FileReceiver`.
 ```
 Shared/          Compiled into both app targets. Platform-agnostic except
                  where marked with #if os(...). No SwiftUI, no AppKit/UIKit.
+  Anywhere/      Cross-network reachability: ReachabilitySnapshot +
+                 connect-candidate ordering, NAT-PMP/PCP and UPnP wire
+                 parsing (pure logic; the transports live in MacHost).
   Models/        Plain value types shared by both apps' view layers.
   Protocol/      The wire format: ByteWriter/ByteReader, ProtocolMessage,
                  FrameParser. See PROTOCOL.md.
   Networking/    MessageTransport (the NWConnection wrapper), Bonjour
                  service constants, NWParameters factory.
-  Security/      KeychainStore now; identity/pairing crypto from Phase 2.
+  Security/      Keychain-backed trust store, identity/pairing crypto.
   Utilities/     Logging categories, device identity.
 
 MacHost/         macOS app only. AppKit/CoreGraphics/ScreenCaptureKit live
-                 here, never in Shared.
+                 here, never in Shared. Anywhere/ adds the NAT port mapper,
+                 UPnP gateway client, iCloud publisher, and
+                 ReachabilityController orchestrator; Power/ adds
+                 SystemAvailabilityKeeper (power assertions + sleep/wake
+                 observation).
 iPhoneRemote/    iOS app only. UIKit/AVFoundation live here, never in Shared.
+                 Anywhere/ adds AnywhereDirectory (iCloud record fetch).
 ```
 
 Both app targets follow MVVM: `Views/` are SwiftUI and hold no business
@@ -116,7 +124,13 @@ iPhone launches, opens Macs list
 
 User taps a Mac
   → DeviceSessionViewModel.connect(to:)
-  → RemoteConnection dials the Mac's NWEndpoint.service directly
+  → candidate endpoints assembled: the live Bonjour endpoint first, then
+    global IPv6 addresses and the public IPv4 + router-mapped port learned
+    via iCloud or past sessions (see "Anywhere access" below)
+  → each candidate is dialed in order with a short TCP timeout; the first
+    that authenticates (or asks for a pairing code) wins, and its endpoint
+    becomes `activeEndpoint` — video and file connections dial it too
+  → RemoteConnection dials the winning endpoint
     (Network.framework resolves the Bonjour endpoint internally — no
     separate NWEndpoint.hostPort resolution step needed)
   → on .ready, sends HelloPayload; Mac replies HelloAck (still just an
@@ -129,6 +143,9 @@ User taps a Mac
         PairingCodeView; submitPairingCode(_:) resumes the same connection
   → on success, both sides hold a SecureSession (AES-GCM key) and the peer's
     verified identity — this is what "Connected" actually means
+  → right after authentication the Mac pushes a reachabilityUpdate message:
+    its current LAN / IPv6 / WAN addresses, which the iPhone stores in the
+    paired-device record for future cross-network connects
 ```
 
 Full message-by-message sequence, including exactly which side sends what
@@ -145,7 +162,59 @@ iterator has to be threaded through by hand rather than re-derived from
 `transport.events` each time (`AsyncStream` doesn't support more than one
 live consumer).
 
+## Anywhere access (cross-network)
+
+Bonjour only works inside one network, so three cooperating pieces make
+"control from anywhere" work without a hosted signaling service:
+
+```
+Mac side                                          iPhone side
+────────                                          ───────────
+ReachabilityController                            AnywhereDirectory
+  gathers: LAN IPv4, global IPv6,                   reads records for paired
+    WAN IP + mapped port                            IDs from the private
+  NATPortMapper: PCP → NAT-PMP →                    CloudKit database
+    UPnP IGD port mapping, renewed                DeviceSessionViewModel
+    ~2× per lease                                   dials candidates in order:
+  ReachabilityPublisher: upserts                  [LAN] → [IPv6…] → [WAN:port]
+    record keyed by device UUID
+  HostSessionManager also pushes the
+    same snapshot as reachabilityUpdate
+    to any already-connected iPhone,
+    which persists it in its trust store
+```
+
+Design choices worth noting:
+
+- **iCloud is the rendezvous, never a relay.** Only small address records
+  cross iCloud; all screen/input traffic stays peer-to-peer. The database
+  is the user's *private* one — same Apple ID on both devices, nothing
+  shared.
+- **Every path reuses one authentication.** A connection over IPv6 from
+  cellular runs the identical Ed25519 session-auth handshake as a LAN
+  connection; security doesn't depend on network location (SECURITY.md).
+- **Failure degrades to older behavior.** No iCloud → remembered endpoints
+  from past sessions still work while the home IP hasn't changed; no router
+  mapping → IPv6 may still carry it;   neither → same-Wi-Fi control is
+  unaffected.
+
+## Power and availability
+
+`SystemAvailabilityKeeper` holds a `ProcessInfo.beginActivity` with
+`.userInitiated | .idleSystemSleepDisabled` for the app's lifetime: App Nap
+never throttles the listener, and idle system sleep never fires — while the
+*display* remains free to sleep on its own schedule, which is exactly the
+"screen off but reachable" state. It observes `NSWorkspace` notifications so
+the rest of the app can react: on display sleep, `VideoStreamer`s tell the
+iPhone why video paused (input keeps working); on display/system wake they
+restart ScreenCaptureKit capture (streams die with the display) and
+`ReachabilityController.refresh()` republishes addresses that may have
+changed. Hardware limits are documented, not fought: lid-closed-on-battery
+still sleeps, powered-off is unreachable.
+
 ## Video pipeline
+
+
 
 ```
 MacHost/ScreenCapture/ScreenCaptureSession   SCStream → CVPixelBuffer, per frame

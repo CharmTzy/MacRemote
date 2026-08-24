@@ -56,6 +56,25 @@ actor VideoStreamer {
         await startCapturing(displayID: id)
     }
 
+    /// The Mac's displays just went to sleep. Capture produces no frames
+    /// while they're off, so tell the iPhone why the picture froze instead
+    /// of leaving it staring at a silent last frame — input keeps working.
+    func handleDisplaySleep() async {
+        await sendError("The Mac's display is asleep — video resumes when it wakes. Touch input still works.")
+    }
+
+    /// Displays are back (or the system woke): ScreenCaptureKit streams die
+    /// with the display, so restart capture against the same display and
+    /// send a fresh `VideoConfig` + keyframe to resync the decoder.
+    func handleDisplayWake() async {
+        guard let displayID = currentDisplayID else { return }
+        Logging.capture.info("Restarting capture after display wake")
+        await captureSession.stop()
+        encoder?.stop()
+        encoder = nil
+        await startCapturing(displayID: displayID)
+    }
+
     /// Applies a new quality profile (bitrate + frame rate target) by
     /// restarting capture/encoding against the currently-selected display.
     func applyQuality(_ profile: QualityProfile) async {

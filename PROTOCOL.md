@@ -37,7 +37,7 @@ hands you, get back zero or more complete, decoded messages.
 | Category | Byte | Carries |
 |---|---|---|
 | `authentication` | 1 | Pairing handshake, session auth (implemented) |
-| `session` | 2 | Hello / HelloAck (implemented) |
+| `session` | 2 | Hello / HelloAck / ReachabilityUpdate (implemented) |
 | `video` | 3 | Encoded frame data (implemented) |
 | `input` | 4 | Mouse/touch/trackpad events (implemented) |
 | `keyboard` | 5 | Key events, modifiers, text input (implemented) |
@@ -96,6 +96,29 @@ String   reason          (empty string decodes as nil)
 always `true` for a valid Hello from an iPhone speaking the right protocol
 version. The real accept/reject decision happens later, in `authResult`,
 once authentication actually runs.
+
+### `session` / ReachabilityUpdate (type 3)
+
+Sent by the Mac on the control connection, immediately after
+authentication succeeds and again whenever its network situation changes.
+Carries this Mac's dialable addresses so the iPhone can reach it later from
+other networks (stored in the paired-device record). Always travels inside
+a `secureEnvelope`. Mirrors what the Mac also publishes to iCloud — see
+ARCHITECTURE.md's "Anywhere access".
+
+```
+String   lanIPv4Address    (empty string decodes as nil)
+String   wanIPv4Address    (empty string decodes as nil)
+Bool     hasExternalPort
+UInt16   externalPort      (ignored when hasExternalPort is false)
+UInt8    ipv6AddressCount  (capped at 8)
+String   ipv6Addresses[ipv6AddressCount]
+String   wakeMACAddress    (empty string decodes as nil; Wake-on-LAN target)
+```
+
+None of these values are secrets and knowing them authenticates nothing —
+sessions still require proving possession of the paired Ed25519 private
+key. See SECURITY.md.
 
 ### `heartbeat` / Ping, Pong (types 1, 2)
 

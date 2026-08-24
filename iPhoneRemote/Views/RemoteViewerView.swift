@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Network
 
 /// The screen-mirroring and direct-touch-control view — the most
 /// important screen in the app. The video fills the whole screen; the
@@ -9,6 +10,10 @@ import UIKit
 /// rather than crowding the bar.
 struct RemoteViewerView: View {
     let mac: DiscoveredMac
+    /// The endpoint the control connection actually succeeded with — when
+    /// connecting from another network this is an internet address, and the
+    /// video connection must dial it too.
+    let endpoint: NWEndpoint
     @ObservedObject var controlSession: DeviceSessionViewModel
     @StateObject private var videoSession = VideoSessionViewModel()
     @StateObject private var keyboardSession = KeyboardInputSession()
@@ -139,7 +144,7 @@ struct RemoteViewerView: View {
         .toolbar(.hidden, for: .navigationBar)
         .statusBarHidden()
         .onAppear {
-            videoSession.start(endpoint: mac.endpoint)
+            videoSession.start(endpoint: endpoint)
             keyboardSession.send = { message in controlSession.sendInput(message) }
             controlSession.requestRunningApplications()
         }
@@ -242,7 +247,10 @@ struct RemoteViewerView: View {
                 contentSize: videoSize,
                 viewSize: videoArea,
                 scalingMode: .aspectFit,
-                horizontalAlignment: .leading
+                // Trailing: the video's right edge sits against the side
+                // panel instead of leaving a dead gap there, which also
+                // pulls the left edge clear of the iPhone's curved corners.
+                horizontalAlignment: .trailing
             )
         }
         return VideoContentGeometry(

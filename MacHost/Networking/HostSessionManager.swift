@@ -18,14 +18,31 @@ final class HostSessionManager: ObservableObject {
     @Published private(set) var lastError: String?
     @Published private(set) var activeTransfers: [UUID: FileTransferProgress] = [:]
 
+    /// Keeps the system awake (display may sleep; system doesn't) so
+    /// iPhones can connect any time the app is open — see its doc comment.
+    let availabilityKeeper = SystemAvailabilityKeeper()
+    /// Gathers and publishes this Mac's internet-reachable addresses.
+    let reachability = ReachabilityController()
+
     let pairingCoordinator: PairingCoordinator
     private let trustedDevices = TrustedDeviceStore()
     private let clipboardMonitor = ClipboardMonitor()
     private var controlChannels: [UUID: SecureChannel] = [:]
+    private var activeVideoStreamers: [VideoStreamer] = []
     private var workspaceObserverTokens: [NSObjectProtocol] = []
 
     private var listener: NWListener?
     private static let listenerQueue = DispatchQueue(label: "com.macremote.host.listener")
+
+    /// True while the app wants to be reachable — gates auto-recovery.
+    private var wantsRunning = false
+    private let pathMonitor = NWPathMonitor()
+    private var watchdogTask: Task<Void, Never>?
+    /// Consecutive probes that failed to see our own Bonjour advertisement.
+    private var missedAdvertisementProbes = 0
+    /// Last seen mesh-VPN (Tailscale etc.) addresses, so the path monitor
+    /// can detect a VPN interface appearing and rebuild the listener.
+    private var lastKnownVPNInterfaces: [String] = []
 
     init(pairingCoordinator: PairingCoordinator? = nil) {
         self.pairingCoordinator = pairingCoordinator ?? PairingCoordinator()
@@ -33,13 +50,23 @@ final class HostSessionManager: ObservableObject {
             self?.broadcastClipboard(text)
         }
         observeRunningApplications()
+        observeAvailabilityChanges()
     }
 
     func start() {
         guard listener == nil else { return }
+        wantsRunning = true
+        availabilityKeeper.begin()
+        reachability.start()
+        startPathMonitoring()
+        startAdvertisementWatchdog()
 
         do {
-            let newListener = try NWListener(using: NWParametersFactory.controlChannel(), on: ServiceConstants.defaultPort)
+            let parameters = NWParametersFactory.controlChannel()
+            // Rebinding the same port right after a restart (watchdog or
+            // wake) needs SO_REUSEADDR or macOS can hand back EADDRINUSE.
+            parameters.allowLocalEndpointReuse = true
+            let newListener = try NWListener(using: parameters, on: ServiceConstants.defaultPort)
 
             var txt = NWTXTRecord()
             txt[ServiceConstants.TXTKey.deviceName] = DeviceIdentity.localDeviceName
@@ -74,13 +101,38 @@ final class HostSessionManager: ObservableObject {
         }
     }
 
-    func stop() {
+    /// Cancels only the listener — active iPhone sessions keep running.
+    private func teardownListener() {
         listener?.cancel()
         listener = nil
+    }
+
+    /// Rebinds the socket and re-registers Bonjour. Used after sleep/wake,
+    /// network changes, and whenever the watchdog notices the advertisement
+    /// vanished (macOS can drop mDNS registration across interface changes
+    /// even while the TCP socket is still perfectly alive).
+    func restartAdvertising() {
+        guard wantsRunning else { return }
+        teardownListener()
+        clipboardMonitor.stop()
+        isAdvertising = false
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(300))
+            self.start()
+        }
+    }
+
+    func stop() {
+        wantsRunning = false
+        watchdogTask?.cancel()
+        watchdogTask = nil
+        pathMonitor.cancel()
+        teardownListener()
         isAdvertising = false
         connectedPeers.removeAll()
         clipboardMonitor.stop()
         controlChannels.removeAll()
+        reachability.stop()
     }
 
     private func broadcastClipboard(_ text: String) {
@@ -100,6 +152,44 @@ final class HostSessionManager: ObservableObject {
             workspaceObserverTokens.append(center.addObserver(forName: name, object: nil, queue: .main) { [weak self] _ in
                 Task { @MainActor in self?.broadcastRunningApplications() }
             })
+        }
+    }
+
+    /// Reacts to display/system sleep and wake: video streams pause with an
+    /// explanation while the screen is off, resume (capture restarted) when
+    /// it comes back, and the published reachability snapshot is refreshed
+    /// after any wake since addresses may have changed.
+    private func observeAvailabilityChanges() {
+        availabilityKeeper.onDisplaySleep = { [weak self] in
+            let streamers = self?.activeVideoStreamers ?? []
+            Task {
+                for streamer in streamers {
+                    await streamer.handleDisplaySleep()
+                }
+            }
+        }
+        availabilityKeeper.onWake = { [weak self] in
+            guard let self else { return }
+            // ScreenCaptureKit streams die with the display — rebuild them,
+            // and refresh published addresses (they often change on wake).
+            let streamers = self.activeVideoStreamers
+            Task {
+                for streamer in streamers {
+                    await streamer.handleDisplayWake()
+                }
+            }
+            self.reachability.refresh()
+            // Bonjour registration frequently doesn't survive sleep/wake —
+            // rebind the listener so the iPhone can see us again.
+            self.restartAdvertising()
+        }
+        reachability.onSnapshotChanged = { [weak self] payload in
+            guard let self else { return }
+            Task {
+                for channel in self.controlChannels.values {
+                    try? await channel.send(.reachabilityUpdate(payload))
+                }
+            }
         }
     }
 
@@ -137,19 +227,149 @@ final class HostSessionManager: ObservableObject {
         case .ready:
             isAdvertising = true
             lastError = nil
+            missedAdvertisementProbes = 0
             Logging.discovery.info("Advertising \(ServiceConstants.bonjourType, privacy: .public) on port \(ServiceConstants.defaultControlPort)")
         case .failed(let error):
             isAdvertising = false
-            lastError = "Couldn't advertise this Mac on the local network."
-            Logging.discovery.error("Listener failed: \(String(describing: error), privacy: .public)")
+            teardownListener()
+            if case .posix(let code) = error, code == .EADDRINUSE {
+                lastError = "Port 53511 is already in use — another Mac Remote copy may be running. Quit the other copy; this one will retry."
+            } else {
+                lastError = "Couldn't advertise this Mac on the local network — will keep retrying."
+            }
+            Logging.discovery.error("Listener failed: \(String(describing: error), privacy: .public); auto-retrying")
+            scheduleRetryAfterFailure()
         case .cancelled:
             isAdvertising = false
-        case .setup, .waiting:
+        case .setup:
             break
+        case .waiting(let error):
+            // Waiting is recoverable (usually no network yet) — surface it
+            // but don't tear anything down.
+            Logging.discovery.notice("Listener waiting: \(String(describing: error), privacy: .public)")
         @unknown default:
             break
         }
     }
+
+    /// A failed listener stays failed forever unless we act. Retry with a
+    /// short delay for as long as the app wants to be reachable.
+    private func scheduleRetryAfterFailure() {
+        Task { @MainActor in
+            try? await Task.sleep(for: .seconds(3))
+            guard self.wantsRunning, self.listener == nil else { return }
+            self.start()
+        }
+    }
+
+    /// Restarts advertising when the network path changes. Two cases:
+    /// the listener died during an outage (restart when network returns),
+    /// or a mesh-VPN interface (Tailscale etc.) appeared/disappeared — a
+    /// listener created before the VPN came up doesn't accept connections
+    /// on its address, so it must be rebuilt.
+    private func startPathMonitoring() {
+        lastKnownVPNInterfaces = LocalNetworkInfo.meshVPNIPv4Addresses()
+        pathMonitor.pathUpdateHandler = { [weak self] path in
+            Task { @MainActor in
+                guard let self, self.wantsRunning else { return }
+
+                let vpn = LocalNetworkInfo.meshVPNIPv4Addresses()
+                let vpnChanged = vpn != self.lastKnownVPNInterfaces
+                self.lastKnownVPNInterfaces = vpn
+                if vpnChanged {
+                    Logging.discovery.notice("Mesh VPN interfaces changed (\(vpn.joined(separator: ","), privacy: .public)) — rebuilding listener")
+                    self.restartAdvertising()
+                    return
+                }
+
+                if path.status == .satisfied, !self.isAdvertising, self.listener == nil {
+                    Logging.discovery.notice("Network path satisfied again — restarting listener")
+                    self.start()
+                }
+            }
+        }
+        pathMonitor.start(queue: DispatchQueue(label: "com.macremote.host.path"))
+    }
+
+    /// Belt-and-suspenders: every 20 s, browse for our own Bonjour service.
+    /// macOS can silently drop a service's mDNS registration across Wi-Fi
+    /// roams and interface changes while the TCP socket keeps working —
+    /// from outside that looks identical to "app gone". Two consecutive
+    /// misses trigger a full listener rebuild.
+    private func startAdvertisementWatchdog() {
+        watchdogTask?.cancel()
+        watchdogTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .seconds(20))
+                guard let self, !Task.isCancelled, self.wantsRunning, self.listener != nil else { continue }
+
+                let seen = await Self.probeOwnAdvertisement()
+                if seen || !self.isAdvertising && self.listener == nil {
+                    // Either healthy, or already mid-recovery via .failed.
+                    self.missedAdvertisementProbes = 0
+                    continue
+                }
+                self.missedAdvertisementProbes += 1
+                Logging.discovery.notice("Bonjour probe missed (\(self.missedAdvertisementProbes)/2)")
+                if self.missedAdvertisementProbes >= 2 {
+                    self.missedAdvertisementProbes = 0
+                    Logging.discovery.notice("Advertisement lost — rebuilding listener")
+                    self.restartAdvertising()
+                }
+            }
+        }
+    }
+
+    /// Browses `_macremote._tcp` for up to 6 s looking for THIS Mac's own
+    /// deviceID in the advertised TXT record.
+    private static func probeOwnAdvertisement() async -> Bool {
+        let parameters = NWParameters()
+        parameters.includePeerToPeer = false
+        let browser = NWBrowser(for: .bonjour(type: ServiceConstants.bonjourType, domain: nil), using: parameters)
+
+        return await withCheckedContinuation { continuation in
+            let queue = DispatchQueue(label: "com.macremote.host.watchdog")
+            let myDeviceID = DeviceIdentity.localDeviceID().uuidString
+            let state = QueueProtectedFlag()
+
+            func finish(_ result: Bool) {
+                guard state.tryFinish() else { return }
+                browser.cancel()
+                continuation.resume(returning: result)
+            }
+
+            browser.browseResultsChangedHandler = { results, _ in
+                let mine = results.contains { result in
+                    if case .bonjour(let txt) = result.metadata,
+                       let id = txt[ServiceConstants.TXTKey.deviceID] {
+                        return id == myDeviceID
+                    }
+                    return false
+                }
+                if mine { finish(true) }
+            }
+            browser.stateUpdateHandler = { state in
+                if case .failed = state { finish(false) }
+            }
+            browser.start(queue: queue)
+            queue.asyncAfter(deadline: .now() + 6) { finish(false) }
+        }
+    }
+
+/// One-shot latch so the probe's completion can only resume once, from
+/// whichever callback (result, failure, or timeout) wins the race.
+private final class QueueProtectedFlag: @unchecked Sendable {
+    private let lock = NSLock()
+    private var finished = false
+
+    func tryFinish() -> Bool {
+        lock.lock()
+        defer { lock.unlock() }
+        guard !finished else { return false }
+        finished = true
+        return true
+    }
+}
 
     private func handleNewConnection(_ connection: NWConnection) {
         let transport = MessageTransport(connection: connection)
@@ -189,8 +409,14 @@ final class HostSessionManager: ObservableObject {
                 case .control:
                     var mutableSession = session
                     self.registerPeer(hello)
-                    self.controlChannels[hello.deviceID] = SecureChannel(transport: transport, session: session)
+                    let channel = SecureChannel(transport: transport, session: session)
+                    self.controlChannels[hello.deviceID] = channel
                     self.sendRunningApplications(to: hello.deviceID)
+                    // Bring the iPhone up to date with this Mac's current
+                    // addresses so it can reach us from other networks later.
+                    if let payload = self.reachability.currentPayload() {
+                        try? await channel.send(.reachabilityUpdate(payload))
+                    }
                     await self.pumpAuthenticatedTraffic(deviceID: hello.deviceID, transport: transport, iterator: &iterator, session: &mutableSession)
                     self.removePeer(id: hello.deviceID)
                     self.controlChannels.removeValue(forKey: hello.deviceID)
@@ -230,6 +456,8 @@ final class HostSessionManager: ObservableObject {
         iterator: inout AsyncStream<TransportEvent>.Iterator
     ) async {
         let streamer = VideoStreamer(transport: transport, session: session)
+        activeVideoStreamers.append(streamer)
+        defer { activeVideoStreamers.removeAll { $0 === streamer } }
         await streamer.start()
         Logging.session.info("Streaming video to \(deviceID.uuidString, privacy: .public)")
 

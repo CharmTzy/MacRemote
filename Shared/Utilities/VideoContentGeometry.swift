@@ -9,6 +9,10 @@ enum VideoScalingMode: Equatable {
 enum VideoHorizontalAlignment: Equatable {
     case center
     case leading
+    /// Flush against the view's right edge — used in the landscape side-
+    /// panel layout so the video's right edge meets the panel and its left
+    /// edge clears the iPhone's curved screen corners.
+    case trailing
 }
 
 /// Maps a touch point in the viewer's on-screen coordinate space to a
@@ -48,8 +52,14 @@ struct VideoContentGeometry: Equatable {
             ? max(horizontalScale, verticalScale)
             : min(horizontalScale, verticalScale)
         let renderedSize = CGSize(width: contentSize.width * scale, height: contentSize.height * scale)
+        let x: CGFloat
+        switch horizontalAlignment {
+        case .leading: x = 0
+        case .trailing: x = viewSize.width - renderedSize.width
+        case .center: x = (viewSize.width - renderedSize.width) / 2
+        }
         return CGRect(
-            x: horizontalAlignment == .leading ? 0 : (viewSize.width - renderedSize.width) / 2,
+            x: x,
             y: (viewSize.height - renderedSize.height) / 2,
             width: renderedSize.width,
             height: renderedSize.height

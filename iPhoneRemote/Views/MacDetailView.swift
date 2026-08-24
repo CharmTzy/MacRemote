@@ -18,17 +18,17 @@ struct MacDetailView: View {
                 HStack(spacing: 15) {
                     Image(systemName: "macbook")
                         .font(.system(size: 29, weight: .medium))
-                        .foregroundStyle(.white)
+                        .foregroundStyle(.primary)
                         .frame(width: 62, height: 62)
                         .background(BrandTheme.accentGradient, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text(mac.name)
                             .font(.title3.weight(.bold))
-                            .foregroundStyle(.white)
+                            .foregroundStyle(.primary)
                         Text(mac.model ?? "Mac")
                             .font(.subheadline)
-                            .foregroundStyle(.white.opacity(0.55))
+                            .foregroundStyle(.secondary)
                         Label(statusLabel, systemImage: mac.state == .offline ? "moon.zzz.fill" : "checkmark.circle.fill")
                             .font(.caption.weight(.semibold))
                             .foregroundStyle(mac.state == .offline ? Color.orange : BrandTheme.cyan)
@@ -43,10 +43,23 @@ struct MacDetailView: View {
 
             Section {
                 LabeledContent("Status", value: statusLabel)
+                if let progress = session.connectProgressMessage {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text(progress)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
                 if let error = session.lastErrorMessage {
                     Text(error)
                         .font(.caption)
                         .foregroundStyle(.red)
+                }
+                if !mac.internetCandidates.isEmpty {
+                    Text("This Mac can also be reached over the internet.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
             }
 
@@ -82,7 +95,12 @@ struct MacDetailView: View {
                     if session.connectionState == .connected || session.connectionState == .reconnecting {
                         session.disconnect()
                     } else {
-                        session.connect(to: mac.endpoint, displayName: mac.name)
+                        session.connect(
+                            to: mac.endpoint,
+                            internetCandidates: mac.internetCandidates,
+                            displayName: mac.name,
+                            primaryLabel: mac.state == .offline ? "Last local address" : "Nearby (Bonjour)"
+                        )
                     }
                 } label: {
                     switch session.connectionState {
@@ -106,7 +124,7 @@ struct MacDetailView: View {
                     }
                 }
                 .font(.headline)
-                .foregroundStyle(.white)
+                .foregroundStyle(.primary)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 8)
                 .background(BrandTheme.accentGradient, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
@@ -165,7 +183,6 @@ struct MacDetailView: View {
         }
         .scrollContentBackground(.hidden)
         .background(BrandTheme.backgroundGradient.ignoresSafeArea())
-        .environment(\.colorScheme, .dark)
         .navigationTitle(mac.name)
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: Binding(
@@ -189,11 +206,15 @@ struct MacDetailView: View {
             Text("Your iPhone will need to pair with this Mac again before it can connect.")
         }
         .fullScreenCover(isPresented: $showingViewer) {
-            RemoteViewerView(mac: mac, controlSession: session)
+            RemoteViewerView(
+                mac: mac,
+                endpoint: session.activeEndpoint ?? mac.endpoint,
+                controlSession: session
+            )
         }
         .fileImporter(isPresented: $showingFileImporter, allowedContentTypes: [.item]) { result in
             if case .success(let url) = result {
-                fileTransfer.send(fileURL: url, to: mac.endpoint)
+                fileTransfer.send(fileURL: url, to: session.activeEndpoint ?? mac.endpoint)
             }
         }
         .onChange(of: session.connectionState) { _, newValue in
@@ -209,7 +230,7 @@ struct MacDetailView: View {
 
     private var statusLabel: String {
         if mac.state == .offline, session.connectionState == .available {
-            return "Offline"
+            return mac.internetCandidates.isEmpty ? "Offline" : "Away — reachable over Internet"
         }
         return session.connectionState.label
     }

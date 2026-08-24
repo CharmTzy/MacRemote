@@ -45,8 +45,8 @@ actor RemoteConnection {
     private let trustedDevices = TrustedDeviceStore()
 
     @discardableResult
-    func connect(to endpoint: NWEndpoint, purpose: ChannelPurpose = .control) async throws -> ConnectResult {
-        let transport = MessageTransport.connect(to: endpoint, parameters: NWParametersFactory.controlChannel())
+    func connect(to endpoint: NWEndpoint, purpose: ChannelPurpose = .control, connectionTimeout: Int = 8) async throws -> ConnectResult {
+        let transport = MessageTransport.connect(to: endpoint, parameters: NWParametersFactory.controlChannel(connectionTimeout: connectionTimeout))
         self.transport = transport
         let stream = await transport.events
         var iter = stream.makeAsyncIterator()
