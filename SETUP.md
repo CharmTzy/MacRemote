@@ -119,26 +119,29 @@ most commonly it's a Wi-Fi network that blocks Bonjour's multicast traffic
 list screen is the fallback; the Mac's address and port are on its
 Overview screen.
 
-## 10. Sign into iCloud on both devices (for anywhere access)
+## 10. Set up Tailscale on both devices (for anywhere access)
 
-Control from another network (cellular, different Wi-Fi) uses your iCloud
-private database as the rendezvous point, so:
+The recommended way to control your Mac from mobile data or another Wi-Fi
+network is the free **Tailscale** app — it creates a private encrypted
+network between your devices and needs no router configuration:
 
-- The Mac and iPhone must be signed into the **same Apple ID**
-  (System Settings → Apple ID on the Mac; Settings → \[your name\] on iOS)
-- iCloud Drive should be enabled for both
+1. Install Tailscale from the App Store on the **iPhone** and from the Mac
+   App Store on the **Mac**
+2. Sign in to the **same account** on both (sharing your real email keeps
+   the two devices in one network — don't use "Hide My Email")
+3. Keep the Tailscale VPN toggle on on both devices
 
-The first pairing still has to happen once on the same Wi-Fi — after that,
-the Mac's Overview screen shows an **Anywhere Access** card: "Ready" with
-your public address when cross-network control is available, or the reason
-it isn't (router declined UPnP, carrier-grade NAT, iCloud unavailable).
-From then on, connecting from anywhere works exactly like connecting at
-home: tap the Mac, tap Connect — the app tries nearby first, then IPv6,
-then over the internet.
+The first pairing still has to happen once on the same Wi-Fi. After that,
+connect once more while Tailscale is on so the iPhone learns the Mac's
+private address — your Mac then shows a **VIA INTERNET** badge on the
+iPhone and is reachable from anywhere: tap the Mac, tap Connect. The app
+tries nearby first, then the private network, then IPv6 and the router's
+public address.
 
-If your router's UPnP is off, enable it (usually under LAN/Advanced
-settings) or add a manual port-forward rule for TCP `53511` to the Mac.
-The Overview card tells you which case applies.
+Without Tailscale, cross-network control still works if your router allows
+it: enable UPnP (usually under LAN/Advanced settings) or add a manual
+port-forward rule for TCP `53511` to the Mac. The Mac's Overview card
+("Anywhere Access") tells you which case applies.
 
 ## 11. Screen-off behavior
 

@@ -2,305 +2,184 @@
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-5b8cff.svg)](LICENSE)
 [![Swift](https://img.shields.io/badge/Swift-5.10-f05138.svg)](https://www.swift.org)
-[![Platforms](https://img.shields.io/badge/platforms-macOS%2014%2B%20%7C%20iOS%2017%2B-16c7d9.svg)](#system-requirements)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%2014%2B%20%7C%20iOS%2017%2B-16c7d9.svg)](#requirements)
 [![Website](https://img.shields.io/badge/website-mac--remote.vercel.app-20c7d9.svg)](https://mac-remote.vercel.app)
 
-Control your Mac from your iPhone over your local network **or across the
-internet**. No accounts to create, no App Store — a Mac host app and an
-iPhone client app that find each other over Bonjour on your LAN, and stay
-reachable from anywhere via iCloud + automatic router setup once paired.
+**Your Mac. In your hands.** See the whole display, move the pointer, type, launch apps, and send files — from your iPhone on the same Wi-Fi, or from anywhere over the internet, even on mobile data. Open source, no account, no App Store.
+<img src="docs/images/remote-control.png" alt="Mac Remote landscape controller: full Mac display on the left, quick app launcher and trackpad on the right" width="100%" />
 
-This is a personal-use project, built from scratch on Apple's native
-frameworks (SwiftUI, Network.framework, ScreenCaptureKit, VideoToolbox,
-CloudKit, CryptoKit) rather than on top of WebRTC or a hosted signaling
-service.
+The landscape controller keeps the complete Mac display on the left, running-app shortcuts at the upper right, and a precise relative trackpad in the lower-right corner.
 
-**[Open the Mac Remote website](https://mac-remote.vercel.app)** for the visual
-setup guide, controls, downloads, troubleshooting, and documentation.
+## Features
 
-## Demo
+| Feature | What it does |
+|---|---|
+| **Full display, zero crop** | Fit mode preserves every pixel of the Mac screen. Switch displays without reconnecting. |
+| **Direct touch + trackpad** | Tap exactly where you mean, or use a relative trackpad with click, right-click, drag, and scroll. |
+| **Keyboard and shortcuts** | Type with the iPhone keyboard and send ⌘⌥⌃⇧, arrows, media keys, Spotlight, and Mission Control. |
+| **Quick app launcher** | Running Mac apps sit beside the display — one tap brings any of them to the front. |
+| **Wake, copy, and send** | Wake a sleeping Mac over LAN, sync clipboard text, and send files to the Mac. |
+| **Control it from anywhere** | Pair once, add Tailscale on both devices, and the Mac stays reachable from cellular or any Wi-Fi. |
+| **Works with the screen off** | The Mac stays connectable while its display sleeps. Video resumes on wake. |
 
-<p align="center">
-  <img src="docs/images/remote-control.png" alt="Mac Remote landscape controller with full Mac display, quick app launcher, and trackpad" width="100%" />
-</p>
+Built natively with SwiftUI, Network.framework, ScreenCaptureKit, VideoToolbox, and CryptoKit — not WebRTC, and not a hosted signaling service. Screen and input traffic go directly between your iPhone and Mac.
 
-The landscape controller keeps the complete Mac display on the left, puts
-running-app shortcuts at the upper right, and reserves the lower-right corner
-for precise relative trackpad control.
+<img src="docs/images/mac-detail.png" alt="Mac Remote connection screen on iPhone showing a remembered Mac and a one-tap Connect button" width="100%" />
 
-<p align="center">
-  <img src="docs/images/mac-detail.png" alt="Mac Remote connection screen on iPhone" width="100%" />
-</p>
+The connection screen discovers nearby Macs over Bonjour and remembers them for one-tap reconnection.
 
-The connection screen discovers nearby Macs over Bonjour and offers a secure
-pairing flow before remote control begins.
+## Download
 
-## Downloads
+- [macOS host app (ZIP)](https://github.com/CharmTzy/MacRemote/releases/latest/download/Mac-Remote-macOS.zip) — macOS 14+
+- [iPhone developer package (IPA)](https://github.com/CharmTzy/MacRemote/releases/latest/download/Mac-Remote-iPhone.ipa) — iOS 17+, **must be signed with your own team**
+- [Complete source (ZIP)](https://github.com/CharmTzy/MacRemote/archive/refs/heads/main.zip) — MIT licensed
 
-- [Download the macOS host ZIP](https://github.com/CharmTzy/MacRemote/releases/latest/download/Mac-Remote-macOS.zip)
-- [Download the unsigned iPhone developer IPA](https://github.com/CharmTzy/MacRemote/releases/latest/download/Mac-Remote-iPhone.ipa)
-- [Download the complete source](https://github.com/CharmTzy/MacRemote/archive/refs/heads/main.zip)
+The IPA is an unsigned developer package. The smoothest path is to build from source and run the iPhone target from Xcode, which the setup below walks through.
 
-The iPhone package must be signed with your own Apple Developer team before
-installation. The recommended path is still to open the project in Xcode and
-run the iPhone target from there.
+## Requirements
 
-## Status
+- A Mac running **macOS 14 (Sonoma)** or later, with **Xcode 15** or later
+- An iPhone running **iOS 17** or later
+- Both devices on the **same Wi-Fi network for the first pairing** (a Mac personal hotspot also works)
+- A **free Apple ID** — no paid Apple Developer Program membership is needed
+- Optional, for control from anywhere: the free **Tailscale** app on both devices
 
-This repository is being built in phases (see `ARCHITECTURE.md` for the full
-list). What exists right now:
+## Setup
 
-- [x] Phase 1 — Project foundation, Bonjour discovery, and a Hello/HelloAck
-      handshake over a real TCP connection.
-- [x] Phase 2 — Pairing (numeric code), Ed25519 device identity, signature-based
-      session authentication for returning devices, AES-GCM encrypted
-      post-auth channel, Keychain-backed trusted-device store with revoke.
-- [x] Phase 3 — Live screen streaming: ScreenCaptureKit capture → VideoToolbox
-      H.264 encode → encrypted video connection → `AVSampleBufferDisplayLayer`
-      on the iPhone, verified on physical Mac and iPhone hardware.
-- [x] Phase 4 — Direct-touch mouse control on the video view: tap (click),
-      double tap, long-press (right click), drag, two-finger scroll, all
-      mapped through normalized coordinates and posted as `CGEvent`s.
-- [x] Phase 5 — Keyboard: the system keyboard types real text on the Mac
-      (Unicode injection, so autocorrect/emoji/any script works), a
-      keyboard-accessory bar carries ⌘⌥⌃⇧ + esc/tab/arrows, and shortcuts
-      like ⌘C work by arming a modifier then tapping a letter.
-- [x] Phase 6 — Product UX: Trackpad mode (relative movement, alongside
-      Direct Touch), a compact translucent remote toolbar, a live
-      multi-display picker (switching doesn't reconnect), and real Settings
-      on both apps (Quality actually changes the encoder's bitrate/frame
-      rate; paired-device management; trackpad sensitivity/natural
-      scrolling). No onboarding carousel — the pairing and permissions
-      flows already guide a first run, and the spec's own guidance is to
-      keep onboarding short.
-- [x] Phase 7 — Clipboard sync (Mac→iPhone automatic; iPhone→Mac is a
-      one-tap "Send Clipboard to Mac" — see SECURITY.md for why they're not
-      symmetric), file transfer (iPhone→Mac, its own dedicated connection
-      per transfer, progress shown on both apps), 15 system/media commands
-      (Mission Control, Spotlight, sleep, volume, play/pause, ...,
-      restart/shutdown behind a confirmation), and automatic reconnection
-      with exponential backoff when the control connection drops
-      unexpectedly.
-- [x] Phase 8 — Automatic quality adjustment (`AdaptiveQualityController`,
-      driven by round-trip time measured over the video connection's own
-      heartbeat, unit tested), continuous-input throttling (mouse
-      move/drag capped to ~60/sec so a fast drag doesn't flood the
-      network), a code-review performance pass (see ARCHITECTURE.md's
-      "Performance notes" — real profiling needs a device this
-      environment doesn't have), and unit test coverage across every wire
-      message, the crypto primitives, coordinate mapping, and the
-      reconnect backoff schedule.
-- [x] iPhone control refinements — full-display Fit rendering without crop,
-      accurate direct-touch and relative trackpad control, a live launcher for
-      running Mac apps in Fit mode's unused margins, and Wake-on-LAN for a
-      remembered Mac that is sleeping on the local network.
-- [x] Anywhere access — after pairing once with the 6-digit code, the
-      iPhone can reach the Mac from any network (cellular, another Wi-Fi):
-      the Mac publishes its addresses to your iCloud private database and
-      opens a path through the home router automatically (PCP / NAT-PMP /
-      UPnP, plus direct IPv6). The Mac also stays connectable while its own
-      display is asleep — only quitting the app or powering off takes it
-      away.
+### 1. Install XcodeGen and generate the project
 
-**Every feature in the spec's success criteria is implemented**: discovery,
-pairing, permissions, live screen mirroring, direct-touch and trackpad
-control, keyboard input and shortcuts, multi-display switching, clipboard
-sync, file transfer, system commands, automatic reconnection, and adaptive
-quality. All 8 phases are code-complete.
-
-The Mac and iPhone targets have been built with Xcode and exercised on real
-hardware. The shared protocol, crypto, input geometry, reconnect policy, and
-compatibility code are covered by the macOS unit-test target.
-
-## Project structure
-
-```
-MacRemote/
-├── project.yml          XcodeGen project definition (see SETUP.md)
-├── Shared/               Code compiled into both apps
-│   ├── Models/           Connection state, device/display/quality/transfer models
-│   ├── Networking/       NWConnection wrapper, Bonjour constants
-│   ├── Protocol/         Binary wire format and every message type
-│   ├── Security/         Keychain, identity keys, pairing crypto, SecureSession
-│   └── Utilities/        Logging, device identity, geometry/backoff/quality math
-├── MacHost/              macOS app (the Mac being controlled)
-│   ├── App/               App entry point, Info.plist
-│   ├── Views/              SwiftUI screens (Overview/Devices/Display/Permissions/Settings)
-│   ├── ViewModels/         Presentation logic
-│   ├── Networking/         Listener, session handling, video streaming
-│   ├── ScreenCapture/      ScreenCaptureKit capture session
-│   ├── VideoEncoding/      VTCompressionSession H.264 encoder
-│   ├── InputControl/       CGEvent posting (mouse/keyboard/system commands)
-│   ├── Pairing/            Pairing-code coordinator and UI
-│   ├── Clipboard/          NSPasteboard polling
-│   ├── FileTransfer/       Incoming file receiver
-│   ├── Permissions/        Screen Recording / Accessibility checks
-│   └── Settings/           UserDefaults-backed preference keys
-└── iPhoneRemote/         iOS app (the remote control)
-    ├── App/                App entry point, Info.plist
-    ├── Views/              SwiftUI screens (Macs list, detail, remote viewer, ...)
-    ├── ViewModels/         Presentation logic
-    ├── Video/              VTDecompressionSession-free H.264 decode + display
-    ├── Gestures/           UIKit gesture bridges (direct touch, trackpad)
-    ├── Keyboard/           System-keyboard-to-wire-message translation
-    ├── Networking/         Client connection + handshake
-    ├── Discovery/          Bonjour browsing
-    ├── Pairing/             Pairing-code entry UI
-    ├── FileTransfer/        Outgoing file sender
-    └── Settings/            Settings screen + shared preference keys
-```
-
-## System requirements
-
-- A Mac running macOS 14 (Sonoma) or later, with Xcode 15 or later
-- An iPhone running iOS 17 or later
-- Both devices on the same Wi-Fi network for the **first** pairing (or a Mac
-  personal hotspot); after that, see "Over the internet" below
-- Both devices signed into the same Apple ID for cross-network discovery —
-  the Mac publishes its addresses to your own private iCloud database, which
-  only your devices can read
-- A free Apple ID is enough — no paid Apple Developer Program membership
-  is required for any of this. See `SETUP.md`.
-
-## Over the internet
-
-Once an iPhone has paired with the Mac, it remembers how to reach it from
-anywhere:
-
-1. **iCloud rendezvous.** The host app continuously publishes its current
-   addresses (LAN IP, global IPv6 addresses, public IPv4 + router-mapped
-   port) to your iCloud private database under the Mac's device ID. The
-   iPhone reads that record when Bonjour can't see the Mac.
-2. **Automatic router setup.** The Mac asks the router to forward its
-   control port using PCP, then NAT-PMP, then UPnP IGD — whichever the
-   router speaks — and renews the mapping automatically.
-3. **Direct IPv6.** When both networks have IPv6 (cellular always does), the
-   iPhone dials the Mac's IPv6 address directly with no port mapping at all.
-
-Connecting tries each path in order — nearby → IPv6 → internet — and shows
-what it's doing. If iCloud is unavailable, the iPhone falls back to the
-endpoints the Mac reported during past sessions; if those are stale too,
-"Connect by IP Address" always works as a manual last resort.
-
-**Limits no app can bypass:** if your ISP puts you behind carrier-grade NAT
-and neither network has IPv6, inbound connections can't get through — check
-the Anywhere Access card on the Mac's Overview screen, which reports this.
-And the Mac must be running: powered off means unreachable.
-
-## Screen off ≠ unavailable
-
-The host app holds a power assertion while it runs, so closing the lid or
-letting the display sleep doesn't suspend it — the iPhone can still connect
-and control the Mac blind (trackpad + keyboard work fine without seeing the
-screen). Video pauses with a notice and resumes automatically when the
-display wakes. Two hardware realities remain: a MacBook on battery *will*
-sleep when its lid closes (keep it plugged in for lid-closed availability),
-and a shut-down Mac is unreachable by definition.
-
-## Running it
-
-Full walkthrough (including Xcode Personal Team signing) is in
-[`SETUP.md`](SETUP.md). Short version:
+The `.xcodeproj` isn't checked in — it's generated from `project.yml` so the project structure stays a readable, diffable text file. From the repository root:
 
 ```bash
 brew install xcodegen
+```
+
+```bash
 xcodegen generate
+```
+
+This creates `MacRemote.xcodeproj` with three targets: `MacRemoteHost` (the Mac app), `iPhoneRemote` (the iOS app), and `MacRemoteSharedTests`. Re-run `xcodegen generate` any time `project.yml` changes.
+
+### 2. Set unique bundle identifiers
+
+Apple requires globally unique bundle identifiers, even for apps you never submit. `project.yml` ships with placeholders that must be replaced before installing on hardware. Open `project.yml` and change both:
+
+```yaml
+PRODUCT_BUNDLE_IDENTIFIER: com.yourname.macremote.host    # MacRemoteHost target
+PRODUCT_BUNDLE_IDENTIFIER: com.yourname.macremote.mobile  # iPhoneRemote target
+```
+
+The two apps share one iCloud container (`iCloud.com.example.MacRemote`, set in `Shared/Networking/ServiceConstants.swift` and both entitlements blocks in `project.yml`). If you rename the bundle IDs, change the container to match on **both** apps — e.g. `iCloud.com.yourname.macremote` — then regenerate:
+
+```bash
+xcodegen generate
+```
+
+### 3. Open the project
+
+```bash
 open MacRemote.xcodeproj
 ```
 
-Then in Xcode: select your Personal Team for both targets, run
-`MacRemoteHost` on your Mac, run `iPhoneRemote` on your iPhone, open Mac
-Remote on the iPhone, and your Mac should appear under **My Macs**.
+### 4. Select your Personal Team
 
-The checked-in bundle identifiers are intentionally generic. Before running
-on physical hardware, replace the `com.example.MacRemote.*` values in
-`project.yml` with identifiers unique to your Apple Developer account.
+For **both** the `MacRemoteHost` and `iPhoneRemote` targets:
 
-## Permissions
+1. Select the target in Xcode's project navigator
+2. Open **Signing & Capabilities**
+3. Under **Team**, choose your name (shown as "Personal Team")
+4. Leave **Automatically manage signing** checked — no manual profile management needed
 
-The Mac app needs **Screen Recording** to stream its screen and
-**Accessibility** to accept mouse/keyboard control — both required for the
-app to be useful, neither silently skipped. It has a dedicated Permissions
-screen that shows real status and links straight to the right System
-Settings pane. If Screen Recording isn't granted when an iPhone tries to
-view the screen, the Mac reports that back explicitly (a `videoError`
-message) instead of the iPhone just seeing a black screen with no
-explanation; if Accessibility isn't granted, input events silently don't
-land (that's how `CGEvent.post` itself behaves) — the Permissions tab is
-where that becomes visible.
+Don't see your name? Sign in first: **Xcode → Settings → Accounts → + → Apple ID**.
 
-Sleep/Restart/Shut Down/Mute/Volume (the system-command Shortcuts) need a
-third, separate permission — **Automation** — the first time one of them
-is used; see SECURITY.md for why that one doesn't have a dedicated status
-row the way the other two do.
+### 5. Run the Mac host
 
-## Remote wake
+Select the `MacRemoteHost` scheme, choose **My Mac** as the destination, and press **Run**. The app opens on an **Overview** screen showing the Mac's name, network address, permission status, and an **Anywhere Access** card.
 
-After the iPhone has seen the updated Mac host once while it is awake, it
-remembers the Mac's local wake address. If the Mac later appears offline,
-the detail screen offers **Wake Mac** and sends a Wake-on-LAN packet.
+### 6. Run the iPhone app
 
-For a MacBook, remote wake is intended for **Sleep**, with the Mac connected
-to power and **System Settings → Battery → Options → Wake for network access**
-enabled. It cannot turn on a fully shut-down MacBook because its network
-hardware is no longer listening. It also cannot wake the Mac from a different
-Wi-Fi network or cellular connection without extra router or VPN setup.
+Connect your iPhone, select the `iPhoneRemote` scheme, choose your iPhone as the destination, and press **Run**.
 
-## Pairing and security
+The first time you run a Personal Team build on a device, iOS refuses to launch it until you trust the certificate: **Settings → General → VPN & Device Management → \[Your Apple ID\] → Trust**.
 
-The first time an iPhone connects to a Mac, the Mac needs "Pair New Device"
-open (Devices tab) showing a 6-digit code, which you enter on the iPhone.
-After that, reconnecting doesn't need the code again — each device proved
-its identity once during pairing and gets recognized automatically from
-then on. See `SECURITY.md` for exactly what's protected and what the threat
-model does and doesn't cover — this is a tool for personal devices, not
-a hardened multi-tenant product, and the docs say so plainly rather than
-overclaim.
+> **Free-account limitation:** Personal Team builds stop running after **7 days**. Re-run from Xcode to renew. This is an Apple restriction on free accounts, not a bug in this project.
+
+### 7. Grant the Mac's permissions
+
+The Mac app needs two permissions, both required for it to be useful:
+
+- **Screen Recording** — to stream the display
+- **Accessibility** — to accept mouse and keyboard input
+
+The app's **Permissions** tab shows live status for each and opens the exact System Settings pane. If Screen Recording is missing, the Mac reports it back explicitly instead of leaving the iPhone on a black screen; if Accessibility is missing, input events silently don't land, and the Permissions tab is where that becomes visible.
+
+A third permission, **Automation**, is requested by macOS the first time you use a system Shortcut (Sleep, Restart, Volume, …). It has no status row because Apple provides no way to check it in advance — see [`SECURITY.md`](SECURITY.md).
+
+### 8. Pair and connect
+
+With both apps running on the same Wi-Fi:
+
+1. On the Mac, open the **Devices** tab and choose **Pair New Device** — a **6-digit code** appears
+2. On the iPhone, open Mac Remote; your Mac appears under **My Macs** within a couple of seconds
+3. Tap the Mac, tap **Connect**, and enter the 6-digit code
+4. Tap **Start Remote Control**
+
+Pairing happens once. Each device proves its identity with an Ed25519 key during pairing and is recognized automatically from then on — no code on later connections. If the Mac doesn't appear, use **Add by IP Address** with the address from the Mac's Overview screen.
+
+### 9. Control it from anywhere (optional)
+
+The recommended path for mobile data or another Wi-Fi is the free **Tailscale** app — a private encrypted network between your devices, with no router configuration:
+
+1. Install Tailscale on the **iPhone** (App Store) and on the **Mac** (Mac App Store)
+2. Sign in to the **same account** on both — share your real email rather than using "Hide My Email", so both devices land in one network
+3. Keep the Tailscale VPN toggle **on** on both devices
+4. Connect once more over Wi-Fi with Tailscale running, so the iPhone learns the Mac's private address
+
+Your Mac then shows a **VIA INTERNET** badge and connects from anywhere. Connecting tries each path in order — nearby → private network → IPv6 → internet — and shows what it's doing.
+
+Without Tailscale, cross-network control still works if your router cooperates: the Mac requests a port mapping via PCP, NAT-PMP, or UPnP and renews it automatically, and direct IPv6 is tried too. Enable UPnP on the router (usually under LAN or Advanced), or add a manual port-forward for TCP `53511`. The Mac's **Anywhere Access** card reports which case applies.
+
+### 10. Screen-off and remote wake (optional)
+
+The host app holds a power assertion, so the Mac stays connectable while its display sleeps — trackpad and keyboard keep working blind, and video resumes when the display wakes. Two hardware limits remain: a MacBook that closes its lid **on battery** will sleep (keep it plugged in), and a shut-down Mac is unreachable.
+
+For **Wake Mac** on a sleeping MacBook: connect the charger and enable **System Settings → Battery → Options → Wake for network access**. Open both apps together once while the Mac is awake so the iPhone remembers its wake address. Wake-on-LAN can't power on a fully shut-down Mac, and only works while the iPhone can reach the Mac's local network.
+
+## Controls
+
+| Gesture | Result | Fingers |
+|---|---|---|
+| Tap | Left-click at the touched point (Direct Touch) or at the pointer (Trackpad) | 1 finger |
+| Double-tap | Double-click files, folders, title bars, and controls | 2 taps |
+| Long-press | Right-click — opens the Mac context menu | Hold |
+| Drag | Move windows, select text, drag files | Move |
+| Two-finger swipe | Scroll pages and documents (natural scrolling is configurable) | 2 fingers |
+| App icon | Bring any running Mac app to the front | Tap icon |
 
 ## Troubleshooting
 
-**My iPhone doesn't see my Mac.** Confirm both devices are on the same
-Wi-Fi network for the first pairing (not one on Wi-Fi and one on
-cellular/VPN). Corporate or guest Wi-Fi networks often block the multicast
-traffic Bonjour needs (client isolation) — a home network or personal
-hotspot is the reliable path during development. You can always fall back to
-**Add by IP Address** using the address shown on the Mac's Overview screen.
+**My iPhone doesn't see my Mac.** Keep both devices on the same Wi-Fi for the first pairing — not one on Wi-Fi and one on cellular or VPN. Corporate and guest networks often block the multicast traffic Bonjour needs (client isolation); a home network or personal hotspot is reliable. **Add by IP Address** always works as a fallback.
 
-**My Mac shows "LAN only" under Anywhere Access.** The router declined a
-port mapping — enable UPnP in its settings (often listed as UPnP/NAT-PMP
-under LAN or Advanced), or add a manual port-forward rule for TCP 53511 to
-the Mac. If your provider uses carrier-grade NAT, the card says so; IPv6 may
-still work automatically.
+**The Mac shows "LAN only" under Anywhere Access.** The router declined a port mapping. Enable UPnP in its settings, or add a manual port-forward for TCP `53511` to the Mac. If your provider uses carrier-grade NAT, the card says so — IPv6 may still work automatically.
 
-**Connecting from cellular fails.** Check, in order: the Mac app is open;
-the Mac's Overview card says "Ready"; both devices are signed into the same
-Apple ID with iCloud available; and your router allows UPnP.
+**Connecting from cellular fails.** Check in order: the Mac app is open; its Overview card says "Ready"; Tailscale is connected on **both** devices under the same account; and, without Tailscale, the router allows UPnP or has a port-forward for TCP `53511`.
 
-**Xcode says my bundle identifier is already in use.** Free Personal Team
-accounts need a globally unique bundle ID. Change `com.example.MacRemote.host` /
-`com.example.MacRemote.mobile` in `project.yml` to something under your own name
-(e.g. `com.yourname.macremote.host`), update the iCloud container in
-`ServiceConstants` / both entitlements files to match, then re-run
-`xcodegen generate`.
+**Xcode says my bundle identifier is already in use.** Free Personal Team accounts need globally unique IDs. Change the `com.example.MacRemote.*` values in `project.yml` to something under your own name, update the iCloud container in `ServiceConstants` and both entitlements to match, then re-run `xcodegen generate`.
 
-**The app on my iPhone stops working after a week.** Free Personal Team
-provisioning profiles expire after 7 days. Re-run the app from Xcode with
-your iPhone connected to renew it — this is an Apple limitation of free
-accounts, not a bug here.
+**The app on my iPhone stops working after a week.** Personal Team provisioning profiles expire after 7 days. Re-run from Xcode with the iPhone connected to renew.
 
-## Contributing
+**Why is there black space beside the Mac screen?** The Mac and iPhone have different aspect ratios. Fit mode keeps the complete display visible and uses the spare area for app shortcuts and the trackpad instead of cropping.
 
-Issues and pull requests are welcome. Please read [CONTRIBUTING.md](CONTRIBUTING.md)
-before proposing a change, and keep security-sensitive reports out of public
-issues as described in [SECURITY.md](SECURITY.md).
+## Documentation
+
+- [`SETUP.md`](SETUP.md) — the full setup reference, including edge cases
+- [`ARCHITECTURE.md`](ARCHITECTURE.md) — system design, concurrency model, phase plan
+- [`PROTOCOL.md`](PROTOCOL.md) — wire format and message catalog
+- [`SECURITY.md`](SECURITY.md) — threat model, pairing design, what's protected
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) — how to propose a change
+
+Or read it all on the **[Mac Remote website](https://mac-remote.vercel.app)**.
 
 ## License
 
 Mac Remote is available under the [MIT License](LICENSE).
-
-## Documentation
-
-- [`ARCHITECTURE.md`](ARCHITECTURE.md) — system design, concurrency model, phase plan
-- [`PROTOCOL.md`](PROTOCOL.md) — wire format and message catalog
-- [`SECURITY.md`](SECURITY.md) — threat model, pairing design, what's protected
-- [`SETUP.md`](SETUP.md) — step-by-step Xcode/Personal Team setup
