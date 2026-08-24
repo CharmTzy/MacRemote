@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#080b14" />
-    <meta name="description" content="Set up Mac Remote and control your Mac securely from your iPhone over your local network." />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="description" content="Set up Mac Remote and control your Mac securely from your iPhone — on your Wi-Fi or over the internet, even from mobile data." />
     <meta property="og:title" content="Mac Remote — Your Mac, from your iPhone" />
     <meta property="og:description" content="An open-source, peer-to-peer remote control for macOS and iPhone." />
     <meta property="og:type" content="website" />
@@ -45,15 +45,15 @@
       <section class="hero" id="top">
         <div class="hero-glow" aria-hidden="true"></div>
         <div class="hero-copy reveal">
-          <div class="eyebrow"><span></span> Open source · Local network · No account</div>
+          <div class="eyebrow"><span></span> Open source · Wi-Fi or internet · No account</div>
           <h1>Your Mac.<br /><em>In your hands.</em></h1>
-          <p class="hero-lede">See the whole display, move the pointer, type, launch apps, send files, and wake a sleeping Mac—all from your iPhone.</p>
+          <p class="hero-lede">See the whole display, move the pointer, type, launch apps, and send files—from your iPhone on the same Wi-Fi or from anywhere over the internet, even on mobile data.</p>
           <div class="hero-actions">
             <a class="button primary" href="#download">Download Mac Remote <span aria-hidden="true">↓</span></a>
             <a class="button secondary" href="#setup">Read the setup guide</a>
           </div>
           <div class="hero-proof" aria-label="Project highlights">
-            <span><b>Peer to peer</b> on your Wi-Fi</span>
+            <span><b>Works anywhere</b> via Tailscale</span>
             <span><b>Encrypted</b> after pairing</span>
             <span><b>MIT</b> licensed</span>
           </div>
@@ -64,7 +64,7 @@
             <div class="phone-camera"></div>
             <img src="/assets/demo-remote-control.png" alt="Mac Remote on an iPhone showing a full Mac display with quick-launch apps and a trackpad" />
           </div>
-          <div class="live-chip"><i></i> Live on local Wi-Fi</div>
+          <div class="live-chip"><i></i> Live — Wi-Fi or mobile data</div>
         </div>
       </section>
 
@@ -108,7 +108,17 @@
           <article class="feature-card reveal">
             <span class="feature-icon">⇧</span>
             <h3>Wake, copy, and send</h3>
-            <p>Wake a supported sleeping Mac, sync clipboard text, and send files across your local network.</p>
+            <p>Wake a supported sleeping Mac, sync clipboard text, and send files to your Mac.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="feature-icon">⌁</span>
+            <h3>Control it from anywhere</h3>
+            <p>Pair once, add Tailscale on both devices, and your Mac stays reachable from cellular or any Wi-Fi — no router setup.</p>
+          </article>
+          <article class="feature-card reveal">
+            <span class="feature-icon">☾</span>
+            <h3>Works with the screen off</h3>
+            <p>The Mac stays connectable while its display sleeps. Close the lid (kept plugged in) and control it blind — video resumes on wake.</p>
           </article>
         </div>
       </section>
@@ -117,7 +127,7 @@
         <div class="demo-copy reveal">
           <div class="eyebrow"><span></span> Real device demo</div>
           <h2>See the Mac. Reach every control.</h2>
-          <p>The landscape layout was tested on a physical iPhone. Your Mac screen fits at the left, app shortcuts sit at the upper right, and the trackpad stays in the lower-right corner.</p>
+          <p>The landscape layout was tested on a physical iPhone. Your Mac screen sits beside the app launcher and trackpad — over Wi-Fi or through the internet.</p>
           <ul class="check-list">
             <li>Full screen remains visible without cropping</li>
             <li>App buttons remain tappable after every refresh</li>
@@ -139,7 +149,7 @@
       <section class="section setup-section" id="setup">
         <div class="section-heading reveal">
           <div class="eyebrow"><span></span> Setup</div>
-          <h2>From source to remote control in four steps.</h2>
+          <h2>From source to remote control in five steps.</h2>
           <p>A free Apple ID works. Because Mac Remote is not yet distributed through the App Store, the iPhone build must be signed once in Xcode.</p>
         </div>
 
@@ -160,6 +170,10 @@
           <article class="step reveal">
             <span>4</span>
             <div><h3>Grant, pair, control</h3><p>Allow Screen Recording and Accessibility on the Mac. Open Pair New Device, enter the six-digit code on iPhone, then choose Start Remote Control.</p></div>
+          </article>
+          <article class="step reveal">
+            <span>5</span>
+            <div><h3>Connect from anywhere <small style="color:var(--faint)">(optional)</small></h3><p>Install <b>Tailscale</b> on the Mac and iPhone and sign in to the same account. Connect once on Wi-Fi — after that, your Mac appears with a <b>VIA INTERNET</b> badge and works over mobile data.</p></div>
           </article>
         </div>
         <div class="setup-note reveal">
@@ -230,10 +244,12 @@
       <section class="section faq-section" id="faq">
         <div class="section-heading reveal"><div class="eyebrow"><span></span> Help</div><h2>Questions, answered.</h2></div>
         <div class="faq-list reveal">
-          <details><summary>Why can’t my iPhone find the Mac?<i>+</i></summary><p>Keep both devices on the same Wi-Fi, turn off VPNs during discovery, and avoid guest or corporate networks that isolate clients. If Bonjour is blocked, use Add by IP Address with the address shown in the Mac app.</p></details>
+          <details><summary>Can I control my Mac over mobile data?<i>+</i></summary><p>Yes. Pair once on the same Wi-Fi, then install the free Tailscale app on both the Mac and iPhone and sign in to the same account. Your Mac shows a VIA INTERNET badge and connects from cellular or any other Wi-Fi — no router configuration needed.</p></details>
+          <details><summary>Why can’t my iPhone find the Mac?<i>+</i></summary><p>Keep both devices on the same Wi-Fi for the first pairing, and avoid guest or corporate networks that isolate clients. If Bonjour is blocked, use Add by IP Address with the address shown in the Mac app.</p></details>
+          <details><summary>Does it work when the Mac’s screen is off?<i>+</i></summary><p>Yes. The Mac stays reachable while its display sleeps — only quitting the app or powering off takes it away. Trackpad and keyboard keep working blind; video resumes when the display wakes. A lid-closed MacBook on battery still sleeps, so keep it plugged in.</p></details>
           <details><summary>Can it turn on a fully shut-down MacBook?<i>+</i></summary><p>No. Wake-on-LAN works when supported hardware is sleeping, connected to power, and Wake for network access is enabled. A shut-down MacBook’s Wi-Fi hardware is not listening for the wake packet.</p></details>
           <details><summary>Why do I see black space beside the screen?<i>+</i></summary><p>The Mac and iPhone have different aspect ratios. Fit mode keeps the complete Mac display visible and uses the spare right area for app shortcuts and the trackpad instead of cropping your screen.</p></details>
-          <details><summary>Does the screen go through a cloud server?<i>+</i></summary><p>No. Discovery and control happen directly between your Mac and iPhone on the local network. After pairing, application traffic is encrypted with keys established by the two devices.</p></details>
+          <details><summary>Does the screen go through a cloud server?<i>+</i></summary><p>No. Screen and input traffic goes directly between your iPhone and Mac. On the same network it never leaves your Wi-Fi; over the internet it travels peer-to-peer through Tailscale’s encrypted tunnel, which relays only when a direct path isn’t possible — and even then it stays end-to-end encrypted between your devices.</p></details>
         </div>
       </section>
     </main>
