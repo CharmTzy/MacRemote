@@ -28,11 +28,13 @@ The connection screen discovers nearby Macs over Bonjour and remembers them for 
 
 ## Download
 
+**Latest release: [v0.2.0](https://github.com/CharmTzy/MacRemote/releases/tag/v0.2.0)** — anywhere access over mobile data, screen-off control, adaptive light/dark theme.
+
 - [macOS host app (ZIP)](https://github.com/CharmTzy/MacRemote/releases/latest/download/Mac-Remote-macOS.zip) — macOS 14+
 - [iPhone developer package (IPA)](https://github.com/CharmTzy/MacRemote/releases/latest/download/Mac-Remote-iPhone.ipa) — iOS 17+, **must be signed with your own team**
 - [Complete source (ZIP)](https://github.com/CharmTzy/MacRemote/archive/refs/heads/main.zip) — MIT licensed
 
-The IPA is an unsigned developer package. The smoothest path is to build from source and run the iPhone target from Xcode, which the setup below walks through.
+The links always point at the newest release. The IPA is an unsigned developer package; the smoothest path is to build from source and run the iPhone target from Xcode, which the setup below walks through.
 
 ## Requirements
 
@@ -67,7 +69,7 @@ PRODUCT_BUNDLE_IDENTIFIER: com.yourname.macremote.host    # MacRemoteHost target
 PRODUCT_BUNDLE_IDENTIFIER: com.yourname.macremote.mobile  # iPhoneRemote target
 ```
 
-The two apps share one iCloud container (`iCloud.com.example.MacRemote`, set in `Shared/Networking/ServiceConstants.swift` and both entitlements blocks in `project.yml`). If you rename the bundle IDs, change the container to match on **both** apps — e.g. `iCloud.com.yourname.macremote` — then regenerate:
+Then regenerate:
 
 ```bash
 xcodegen generate
@@ -162,7 +164,7 @@ For **Wake Mac** on a sleeping MacBook: connect the charger and enable **System 
 
 **Connecting from cellular fails.** Check in order: the Mac app is open; its Overview card says "Ready"; Tailscale is connected on **both** devices under the same account; and, without Tailscale, the router allows UPnP or has a port-forward for TCP `53511`.
 
-**Xcode says my bundle identifier is already in use.** Free Personal Team accounts need globally unique IDs. Change the `com.example.MacRemote.*` values in `project.yml` to something under your own name, update the iCloud container in `ServiceConstants` and both entitlements to match, then re-run `xcodegen generate`.
+**Xcode says my bundle identifier is already in use.** Free Personal Team accounts need globally unique IDs. Change the `com.example.MacRemote.*` values in `project.yml` to something under your own name and re-run `xcodegen generate`.
 
 **The app on my iPhone stops working after a week.** Personal Team provisioning profiles expire after 7 days. Re-run from Xcode with the iPhone connected to renew.
 

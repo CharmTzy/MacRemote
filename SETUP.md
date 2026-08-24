@@ -52,14 +52,13 @@ then regenerate:
 xcodegen generate
 ```
 
-**iCloud container note:** the two apps share one iCloud container
-(`iCloud.com.example.MacRemote`, set in `Shared/Networking/
-ServiceConstants.swift` and both entitlements files in `project.yml`). If
-you rename your bundle IDs and Xcode's automatic signing complains about
-the iCloud capability, change `cloudContainerIdentifier` to match your new
-prefix on **both** apps (e.g. `iCloud.com.yourname.macremote`) and
-regenerate — the Mac writes its address records there, the iPhone reads
-them, so they must agree.
+**Note:** the code also ships an optional iCloud rendezvous for cross-network
+discovery, but free Personal Teams can't sign with the iCloud capability, so
+it stays dormant — the Tailscale path in step 10 covers anywhere access
+without it. (With a paid Apple Developer membership, add the iCloud
+entitlements to both targets in `project.yml` and set
+`ServiceConstants.cloudContainerIdentifier` to the same value on both apps
+to enable it.)
 
 ## 5. Select your Personal Team
 
